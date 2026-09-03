@@ -1,0 +1,22 @@
+# dependencies (this project has none at runtime, but tooling may add some)
+node_modules/
+package-lock.json
+
+# vercel
+.vercel
+
+# environment
+.env
+.env.*
+
+# editors / os
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# local scratch
+*.log
+/tmp/
+scratch/

@@ -1,0 +1,2658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ML Bench — algorithm testing &amp; scenario analytics</title>
+<meta name="description" content="Load your tables, fit nine machine learning algorithms, compare scenarios and export a full PDF report. Runs entirely in your browser.">
+<meta name="author" content="Carol Mello">
+<meta property="og:title" content="ML Bench">
+<meta property="og:description" content="A workbench for testing ML algorithms on your own data. No upload, no account, no server.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22'><rect x='1' y='1' width='20' height='20' rx='2' fill='%230f1720'/><path d='M3 17 L7 11 L11 13 L15 6 L19 8' stroke='%23d63a56' stroke-width='1.8' fill='none'/></svg>">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{
+  --paper:#e9edf2;
+  --card:#ffffff;
+  --ink:#0f1720;
+  --ink-2:#3d4d5c;
+  --mut:#6b7d8f;
+  --line:#d3dbe4;
+  --line-soft:#e6ebf1;
+  --blue:#2f3ea8;
+  --blue-soft:#e8eaf7;
+  --coral:#d63a56;
+  --coral-soft:#fbe9ec;
+  --teal:#0d7f7f;
+  --teal-soft:#e2f2f1;
+  --mustard:#a97a00;
+  --mustard-soft:#fbf1dc;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --r:4px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background-color:var(--paper);
+  background-image:
+    linear-gradient(to right, rgba(47,62,168,.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(47,62,168,.045) 1px, transparent 1px);
+  background-size:14px 14px;
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:14px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{margin:0;letter-spacing:-.02em;font-weight:640}
+a{color:var(--blue)}
+button{font-family:inherit}
+::selection{background:var(--blue);color:#fff}
+
+/* ---------- structural labels: monospace, wide, uppercase ---------- */
+.eyebrow{
+  font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--mut);font-weight:600;
+}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ---------- shell ---------- */
+.shell{display:grid;grid-template-columns:236px 1fr;min-height:100vh}
+.rail{
+  background:linear-gradient(180deg,#141c28,#0f1720);
+  color:#cfd8e3;padding:18px 0 24px;position:sticky;top:0;height:100vh;overflow:auto;
+}
+.brand{padding:0 18px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
+.brand .mark{display:flex;align-items:center;gap:9px}
+.brand svg{display:block}
+.brand h1{font-size:16px;color:#fff;letter-spacing:-.01em}
+.brand p{margin:6px 0 0;font-size:11px;color:#7e8ea1;line-height:1.45}
+.nav{padding:14px 10px 0}
+.nav .eyebrow{padding:0 8px 8px;color:#61748a}
+.nav button{
+  display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;
+  color:#b9c6d4;padding:9px 8px;border-radius:var(--r);cursor:pointer;font-size:13px;
+}
+.nav button .idx{font-family:var(--mono);font-size:10px;color:#5d7085;width:14px}
+.nav button:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav button.on{background:var(--blue);color:#fff}
+.nav button.on .idx{color:#b9c2ee}
+.nav button:disabled{opacity:.38;cursor:not-allowed}
+.rail-foot{padding:16px 18px 0;margin-top:18px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#6d7f93}
+
+.main{padding:22px 26px 70px;max-width:1320px}
+.page-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:16px}
+.page-head h2{font-size:22px}
+.page-head p{margin:5px 0 0;color:var(--mut);font-size:13px;max-width:64ch}
+
+/* ---------- run strip (signature element) ---------- */
+.strip{
+  display:flex;gap:8px;overflow-x:auto;padding:8px 0 12px;margin-bottom:14px;
+  border-bottom:1px solid var(--line);scrollbar-width:thin;
+}
+.strip:empty{display:none}
+.chip{
+  flex:0 0 auto;width:184px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:9px 10px;cursor:pointer;position:relative;overflow:hidden;text-align:left;
+}
+.chip:hover{border-color:var(--blue)}
+.chip.on{border-color:var(--blue);box-shadow:inset 0 0 0 1px var(--blue)}
+.chip .cname{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip .cmeta{font-family:var(--mono);font-size:10px;color:var(--mut);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip .cscore{font-family:var(--mono);font-size:17px;margin-top:4px;letter-spacing:-.02em}
+.chip .spark{position:absolute;right:8px;bottom:6px;opacity:.85}
+.chip .kill{position:absolute;top:4px;right:5px;border:0;background:none;color:var(--mut);cursor:pointer;font-size:13px;line-height:1;padding:2px 4px;border-radius:3px}
+.chip .kill:hover{background:var(--coral-soft);color:var(--coral)}
+
+/* ---------- panels ---------- */
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin-bottom:14px}
+.panel > header{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:10px 14px;border-bottom:1px solid var(--line-soft);
+}
+.panel > header h3{font-size:13px}
+.panel .body{padding:14px}
+.panel .body.tight{padding:0}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:1080px){.g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:820px){.shell{grid-template-columns:1fr}.rail{position:static;height:auto}.g2,.g3,.g4{grid-template-columns:1fr}.main{padding:16px}}
+
+/* ---------- controls ---------- */
+label.field{display:block;margin-bottom:12px}
+label.field > span{display:block;margin-bottom:5px}
+select,input[type=text],input[type=number],input[type=search],textarea{
+  width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:var(--r);background:#fbfcfd;
+  font-family:var(--sans);font-size:13px;color:var(--ink);
+}
+select:focus,input:focus,textarea:focus,button:focus-visible,.chip:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+input[type=range]{width:100%;accent-color:var(--blue)}
+.btn{
+  border:1px solid var(--blue);background:var(--blue);color:#fff;padding:8px 14px;border-radius:var(--r);
+  cursor:pointer;font-size:13px;font-weight:560;
+}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:#fff;color:var(--blue)}
+.btn.ghost:hover{background:var(--blue-soft)}
+.btn.quiet{background:#fff;color:var(--ink-2);border-color:var(--line)}
+.btn.quiet:hover{background:var(--paper)}
+.btn.danger{background:#fff;border-color:var(--coral);color:var(--coral)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.btn.sm{padding:5px 10px;font-size:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.checkbox{display:flex;gap:7px;align-items:flex-start;font-size:13px;margin-bottom:7px;cursor:pointer}
+.checkbox input{margin-top:3px;accent-color:var(--blue)}
+.pillbar{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;width:fit-content}
+.pillbar button{border:0;background:#fff;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--ink-2);border-right:1px solid var(--line)}
+.pillbar button:last-child{border-right:0}
+.pillbar button.on{background:var(--blue);color:#fff}
+
+/* ---------- drop zone ---------- */
+.drop{
+  border:1.5px dashed var(--line);border-radius:var(--r);padding:26px;text-align:center;background:
+  repeating-linear-gradient(45deg,#fff,#fff 10px,#fbfcfd 10px,#fbfcfd 20px);
+}
+.drop.hot{border-color:var(--blue);background:var(--blue-soft)}
+.drop h4{font-size:14px;margin-bottom:4px}
+.drop p{margin:0 0 12px;color:var(--mut);font-size:12px}
+
+/* ---------- tables ---------- */
+.tbl-wrap{overflow:auto;max-height:440px}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{padding:6px 10px;text-align:left;border-bottom:1px solid var(--line-soft);white-space:nowrap}
+th{
+  position:sticky;top:0;background:#f7f9fb;z-index:1;font-family:var(--mono);font-size:10px;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--mut);font-weight:600;border-bottom:1px solid var(--line);
+}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+tbody tr:hover{background:#f7f9fb}
+tr.best td{background:var(--blue-soft)}
+
+/* ---------- metric cards ---------- */
+.metric{border:1px solid var(--line);border-radius:var(--r);padding:11px 12px;background:#fff}
+.metric .k{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
+.metric .v{font-family:var(--mono);font-size:22px;letter-spacing:-.03em;margin-top:3px}
+.metric .s{font-size:11px;color:var(--mut);margin-top:2px}
+.metric.good .v{color:var(--teal)}
+.metric.bad .v{color:var(--coral)}
+
+.tag{
+  display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+  padding:2px 6px;border-radius:3px;background:var(--blue-soft);color:var(--blue);
+}
+.tag.teal{background:var(--teal-soft);color:var(--teal)}
+.tag.coral{background:var(--coral-soft);color:var(--coral)}
+.tag.mustard{background:var(--mustard-soft);color:var(--mustard)}
+.tag.grey{background:var(--line-soft);color:var(--ink-2)}
+
+.note{
+  border-left:3px solid var(--blue);background:var(--blue-soft);padding:9px 12px;border-radius:0 var(--r) var(--r) 0;
+  font-size:12.5px;margin-bottom:10px;
+}
+.note.warn{border-color:var(--mustard);background:var(--mustard-soft)}
+.note.bad{border-color:var(--coral);background:var(--coral-soft)}
+.note.ok{border-color:var(--teal);background:var(--teal-soft)}
+.note b{font-weight:640}
+
+.chartbox{position:relative;height:280px}
+.chartbox.tall{height:360px}
+.empty{padding:40px 20px;text-align:center;color:var(--mut);font-size:13px}
+.empty .eyebrow{margin-bottom:8px}
+
+/* confusion matrix */
+.cm{border-collapse:separate;border-spacing:2px;width:auto;font-size:12px}
+.cm td,.cm th{border:0;white-space:nowrap;padding:8px 12px}
+.cm td.cell{
+  font-family:var(--mono);text-align:center;border-radius:3px;color:var(--ink);min-width:56px;
+}
+.cm th{position:static;background:none;border:0}
+
+/* dataset list */
+.ds{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line-soft);cursor:pointer}
+.ds:last-child{border-bottom:0}
+.ds.on{background:var(--blue-soft);box-shadow:inset 3px 0 0 var(--blue)}
+.ds .nm{font-size:13px;font-weight:560}
+.ds .mt{font-family:var(--mono);font-size:10.5px;color:var(--mut)}
+
+.scroller{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;background:#fbfcfd}
+.hide{display:none !important}
+.spinner{
+  width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;
+  display:inline-block;animation:spin .7s linear infinite;vertical-align:-2px;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){*{animation-duration:.001ms !important;transition-duration:.001ms !important}}
+#stage{position:fixed;left:-4000px;top:0;width:900px}
+.toast{
+  position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;
+  padding:9px 16px;border-radius:var(--r);font-size:13px;z-index:99;box-shadow:0 6px 20px rgba(15,23,32,.25);
+}
+kbd{font-family:var(--mono);font-size:11px;background:var(--line-soft);border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:1px 4px}
+details summary{cursor:pointer;font-size:12.5px;color:var(--blue)}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="brand">
+      <div class="mark">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+          <rect x="1" y="1" width="20" height="20" rx="2" stroke="#4a5a92" stroke-width="1.2"/>
+          <path d="M3 17 L7 11 L11 13 L15 6 L19 8" stroke="#d63a56" stroke-width="1.6" fill="none" stroke-linejoin="round"/>
+          <circle cx="15" cy="6" r="1.8" fill="#fff" stroke="#d63a56" stroke-width="1.2"/>
+        </svg>
+        <h1>ML Bench</h1>
+      </div>
+      <p>Load tables, run algorithms, compare scenarios, print the report.</p>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="eyebrow">Workflow</div>
+      <button data-view="data" class="on"><span class="idx">01</span> Data</button>
+      <button data-view="model"><span class="idx">02</span> Model setup</button>
+      <button data-view="runs"><span class="idx">03</span> Scenarios</button>
+      <button data-view="analytics"><span class="idx">04</span> Analytics</button>
+      <button data-view="project"><span class="idx">05</span> Projections</button>
+      <button data-view="report"><span class="idx">06</span> Report</button>
+    </nav>
+    <div class="rail-foot">
+      <div class="eyebrow" style="color:#61748a">Session</div>
+      <div id="railStats" class="num" style="margin-top:6px">0 tables · 0 runs</div>
+      <div style="margin-top:10px;line-height:1.5">Everything runs in this browser tab. Nothing is uploaded anywhere. Closing the tab clears it.</div>
+      <div style="margin-top:12px"><a href="about.html" style="color:#9fb0c2;font-size:12px;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.18)">About this project &amp; who built it &rarr;</a></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="strip" id="strip"></div>
+
+    <!-- ============ 01 DATA ============ -->
+    <section class="view" id="view-data">
+      <div class="page-head">
+        <div>
+          <div class="eyebrow">Step 01</div>
+          <h2>Data</h2>
+          <p>Load one or more tables (CSV, TSV, or JSON array). Each table stays separate — you can point different scenarios at different tables and compare them side by side.</p>
+        </div>
+        <div class="row">
+          <button class="btn ghost sm" id="loadDemo">Load a demo table</button>
+          <button class="btn sm" id="pickFile">Choose files</button>
+        </div>
+      </div>
+      <input type="file" id="fileInput" multiple accept=".csv,.tsv,.txt,.json" class="hide">
+
+      <div class="grid g2">
+        <div>
+          <div class="panel">
+            <div class="body">
+              <div class="drop" id="drop">
+                <h4>Drop tables here</h4>
+                <p>CSV, TSV or JSON array of objects · header row expected · up to ~200k cells works comfortably</p>
+                <button class="btn ghost sm" id="pickFile2">Choose files</button>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <header><h3>Loaded tables</h3><span class="eyebrow" id="dsCount">0</span></header>
+            <div class="body tight" id="dsList"><div class="empty">No tables yet.</div></div>
+          </div>
+        </div>
+        <div class="panel">
+          <header>
+            <h3>Column profile</h3>
+            <div class="row">
+              <span class="eyebrow" id="dsShape"></span>
+              <button class="btn quiet sm" id="btnPreview">Preview rows</button>
+            </div>
+          </header>
+          <div class="body tight" id="profile"><div class="empty">Load a table to see column types, ranges and missing values.</div></div>
+        </div>
+      </div>
+
+      <div class="panel" id="previewPanel" hidden>
+        <header><h3>First 100 rows</h3><button class="btn quiet sm" id="closePreview">Close</button></header>
+        <div class="body tight"><div class="tbl-wrap" id="previewTable"></div></div>
+      </div>
+
+      <div class="panel">
+        <header><h3>Correlations &amp; distributions</h3><span class="eyebrow">numeric columns only</span></header>
+        <div class="body">
+          <div class="grid g2">
+            <div><div class="eyebrow" style="margin-bottom:8px">Pearson correlation</div><div id="corrBox"><div class="empty">—</div></div></div>
+            <div>
+              <div class="row" style="justify-content:space-between;margin-bottom:8px">
+                <span class="eyebrow">Distribution</span>
+                <select id="histCol" style="width:auto;min-width:170px"></select>
+              </div>
+              <div class="chartbox"><canvas id="histChart"></canvas></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 02 MODEL ============ -->
+    <section class="view hide" id="view-model">
+      <div class="page-head">
+        <div>
+          <div class="eyebrow">Step 02</div>
+          <h2>Model setup</h2>
+          <p>Define one scenario: what you are predicting, from which columns, with which algorithm and settings. Run it, change something, run it again — each run is kept.</p>
+        </div>
+        <div class="row">
+          <button class="btn quiet sm" id="btnSweep">Run all algorithms</button>
+          <button class="btn" id="btnRun">Run scenario</button>
+        </div>
+      </div>
+
+      <div class="grid g3">
+        <div class="panel">
+          <header><h3>Target &amp; data</h3></header>
+          <div class="body">
+            <label class="field"><span class="eyebrow">Table</span><select id="cfgDataset"></select></label>
+            <label class="field"><span class="eyebrow">Task</span>
+              <select id="cfgTask">
+                <option value="auto">Detect from target</option>
+                <option value="regression">Regression — predict a number</option>
+                <option value="classification">Classification — predict a category</option>
+                <option value="clustering">Clustering — find groups (no target)</option>
+              </select>
+            </label>
+            <label class="field"><span class="eyebrow">Target column</span><select id="cfgTarget"></select></label>
+            <label class="field"><span class="eyebrow">Split</span>
+              <select id="cfgSplitMode">
+                <option value="random">Random hold-out</option>
+                <option value="stratified">Stratified hold-out (classification)</option>
+                <option value="order">Chronological — last rows held out</option>
+              </select>
+            </label>
+            <label class="field"><span class="eyebrow">Test size · <b class="num" id="splitLbl">25%</b></span>
+              <input type="range" id="cfgSplit" min="10" max="50" step="5" value="25">
+            </label>
+            <div class="grid g2">
+              <label class="field"><span class="eyebrow">Random seed</span><input type="number" id="cfgSeed" value="42"></label>
+              <label class="field"><span class="eyebrow">Cross-validation</span>
+                <select id="cfgCV"><option value="0">Off</option><option value="5">5-fold</option><option value="10">10-fold</option></select>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <header><h3>Features</h3><div class="row"><button class="btn quiet sm" id="featAll">All</button><button class="btn quiet sm" id="featNone">None</button></div></header>
+          <div class="body">
+            <div class="scroller" id="featList"><div class="empty">Pick a table first.</div></div>
+            <div style="margin-top:12px">
+              <div class="eyebrow" style="margin-bottom:6px">Preprocessing</div>
+              <label class="checkbox"><input type="checkbox" id="ppScale" checked><span>Standardise numeric columns <span class="tag grey">needed for k-NN, logistic, k-means</span></span></label>
+              <label class="checkbox"><input type="checkbox" id="ppImpute" checked><span>Fill missing values (median / most frequent)</span></label>
+              <label class="checkbox"><input type="checkbox" id="ppOneHot" checked><span>One-hot encode text columns (≤12 levels, otherwise frequency rank)</span></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <header><h3>Algorithm</h3><span class="tag grey" id="algoFamily">—</span></header>
+          <div class="body">
+            <label class="field"><span class="eyebrow">Algorithm</span><select id="cfgAlgo"></select></label>
+            <p id="algoDesc" style="font-size:12.5px;color:var(--ink-2);margin:0 0 12px"></p>
+            <div class="eyebrow" style="margin-bottom:6px">Hyperparameters</div>
+            <div id="hyper"></div>
+            <label class="field" style="margin-top:8px"><span class="eyebrow">Scenario name</span><input type="text" id="cfgName" placeholder="auto"></label>
+          </div>
+        </div>
+      </div>
+      <div id="costHint"></div>
+      <div id="runMsg"></div>
+    </section>
+
+    <!-- ============ 03 RUNS ============ -->
+    <section class="view hide" id="view-runs">
+      <div class="page-head">
+        <div>
+          <div class="eyebrow">Step 03</div>
+          <h2>Scenarios</h2>
+          <p>Every run you have kept, ranked on its primary metric. Sorting is within-task — regression and classification runs are not comparable, and mixing tables means you are comparing problems, not just models.</p>
+        </div>
+        <div class="row">
+          <button class="btn quiet sm" id="btnClearRuns">Clear all</button>
+          <button class="btn ghost sm" id="btnExportRuns">Download results CSV</button>
+        </div>
+      </div>
+      <div class="panel">
+        <header><h3>Leaderboard</h3><span class="eyebrow" id="runCount">0 runs</span></header>
+        <div class="body tight"><div class="tbl-wrap" id="runTable"><div class="empty">No runs yet. Set one up in step 02.</div></div></div>
+      </div>
+      <div class="grid g2">
+        <div class="panel"><header><h3>Primary metric by scenario</h3></header><div class="body"><div class="chartbox"><canvas id="cmpChart"></canvas></div></div></div>
+        <div class="panel"><header><h3>Train vs test — the overfitting gap</h3></header><div class="body"><div class="chartbox"><canvas id="gapChart"></canvas></div></div></div>
+      </div>
+    </section>
+
+    <!-- ============ 04 ANALYTICS ============ -->
+    <section class="view hide" id="view-analytics">
+      <div class="page-head">
+        <div>
+          <div class="eyebrow">Step 04</div>
+          <h2>Analytics</h2>
+          <p>One scenario in depth. Pick a run from the strip above or the selector.</p>
+        </div>
+        <select id="anPick" style="width:auto;min-width:260px"></select>
+      </div>
+      <div id="anBody"><div class="panel"><div class="empty"><div class="eyebrow">Nothing selected</div>Run a scenario first.</div></div></div>
+    </section>
+
+    <!-- ============ 05 PROJECTIONS ============ -->
+    <section class="view hide" id="view-project">
+      <div class="page-head">
+        <div>
+          <div class="eyebrow">Step 05</div>
+          <h2>Projections</h2>
+          <p>Push new inputs through a fitted model: single what-if cases, one-variable sweeps, or a whole scoring table.</p>
+        </div>
+        <select id="prPick" style="width:auto;min-width:260px"></select>
+      </div>
+      <div id="prBody"><div class="panel"><div class="empty"><div class="eyebrow">Nothing selected</div>Run a scenario first.</div></div></div>
+    </section>
+
+    <!-- ============ 06 REPORT ============ -->
+    <section class="view hide" id="view-report">
+      <div class="page-head">
+        <div>
+          <div class="eyebrow">Step 06</div>
+          <h2>Report</h2>
+          <p>Builds a multi-page PDF: data profile, every selected scenario with its metrics and charts, a comparison section, and the caveats that belong next to the numbers.</p>
+        </div>
+        <button class="btn" id="btnPDF">Build PDF</button>
+      </div>
+      <div class="grid g2">
+        <div class="panel">
+          <header><h3>Contents</h3></header>
+          <div class="body">
+            <label class="field"><span class="eyebrow">Report title</span><input type="text" id="rpTitle" value="Model evaluation report"></label>
+            <label class="field"><span class="eyebrow">Prepared by</span><input type="text" id="rpAuthor" placeholder="your name"></label>
+            <label class="field"><span class="eyebrow">Context / objective</span><textarea id="rpNotes" rows="3" placeholder="What decision is this analysis feeding?"></textarea></label>
+            <div class="eyebrow" style="margin:14px 0 6px">Sections</div>
+            <label class="checkbox"><input type="checkbox" id="rpData" checked><span>Data profile</span></label>
+            <label class="checkbox"><input type="checkbox" id="rpCharts" checked><span>Charts for each scenario</span></label>
+            <label class="checkbox"><input type="checkbox" id="rpImp" checked><span>Feature importance</span></label>
+            <label class="checkbox"><input type="checkbox" id="rpFind" checked><span>Findings and warnings</span></label>
+            <label class="checkbox"><input type="checkbox" id="rpMethod" checked><span>Method and limitations appendix</span></label>
+          </div>
+        </div>
+        <div class="panel">
+          <header><h3>Scenarios to include</h3><button class="btn quiet sm" id="rpAll">Toggle all</button></header>
+          <div class="body"><div class="scroller" id="rpList"><div class="empty">No runs yet.</div></div>
+            <div id="pdfMsg" style="margin-top:12px"></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <header><h3>Findings preview</h3></header>
+        <div class="body" id="findings"><div class="empty">Run at least one scenario.</div></div>
+      </div>
+    </section>
+  </main>
+</div>
+<div id="stage"></div>
+<script>
+'use strict';
+/* ============================================================
+   ML Bench — everything runs client side.
+   Part 1: utilities, data ingestion, profiling, data view.
+   ============================================================ */
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.prototype.slice.call((r || document).querySelectorAll(s));
+const uid = () => Math.random().toString(36).slice(2, 9);
+/* checked at call time, not load time, so a slow CDN still works */
+const hasChart = () => typeof Chart !== 'undefined';
+const hasPDF = () => typeof window !== 'undefined' && !!window.jspdf;
+
+const State = {
+  datasets: [],
+  runs: [],
+  activeDS: null,
+  activeRun: null,
+  view: 'data',
+  charts: {}
+};
+
+/* ---------- number formatting ---------- */
+function fmt(v, d) {
+  if (v === null || v === undefined || (typeof v === 'number' && !isFinite(v))) return '—';
+  if (typeof v !== 'number') return String(v);
+  d = d === undefined ? 4 : d;
+  const a = Math.abs(v);
+  if (a !== 0 && (a >= 1e6 || a < 1e-4)) return v.toExponential(2);
+  if (a >= 1000) return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return String(Number(v.toFixed(d)));
+}
+function pct(v, d) { return v === null || v === undefined || !isFinite(v) ? '—' : (v * 100).toFixed(d === undefined ? 1 : d) + '%'; }
+function esc(s) { return String(s === null || s === undefined ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function toast(msg, ms) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg; document.body.appendChild(t);
+  setTimeout(() => t.remove(), ms || 2600);
+}
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function shuffled(arr, rnd) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
+  return a;
+}
+
+/* ---------- descriptive stats ---------- */
+const S = {
+  mean(a) { let s = 0, n = 0; for (const v of a) if (v !== null && isFinite(v)) { s += v; n++; } return n ? s / n : null; },
+  std(a) { const m = S.mean(a); if (m === null) return null; let s = 0, n = 0; for (const v of a) if (v !== null && isFinite(v)) { s += (v - m) * (v - m); n++; } return n > 1 ? Math.sqrt(s / (n - 1)) : 0; },
+  quantile(sorted, q) {
+    if (!sorted.length) return null;
+    const p = (sorted.length - 1) * q, lo = Math.floor(p), hi = Math.ceil(p);
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (p - lo);
+  },
+  median(a) { const s = a.filter(v => v !== null && isFinite(v)).sort((x, y) => x - y); return S.quantile(s, 0.5); },
+  mode(a) {
+    const c = new Map(); let best = null, n = -1;
+    for (const v of a) { if (v === null || v === undefined || v === '') continue; const k = String(v); const x = (c.get(k) || 0) + 1; c.set(k, x); if (x > n) { n = x; best = v; } }
+    return best;
+  },
+  corr(a, b) {
+    const xs = [], ys = [];
+    for (let i = 0; i < a.length; i++) if (a[i] !== null && b[i] !== null && isFinite(a[i]) && isFinite(b[i])) { xs.push(a[i]); ys.push(b[i]); }
+    if (xs.length < 3) return null;
+    const mx = S.mean(xs), my = S.mean(ys);
+    let sxy = 0, sxx = 0, syy = 0;
+    for (let i = 0; i < xs.length; i++) { const dx = xs[i] - mx, dy = ys[i] - my; sxy += dx * dy; sxx += dx * dx; syy += dy * dy; }
+    return (sxx && syy) ? sxy / Math.sqrt(sxx * syy) : null;
+  }
+};
+
+/* ---------- delimited text parsing ---------- */
+function detectDelim(text) {
+  const head = text.slice(0, 5000).split('\n').slice(0, 5).join('\n');
+  const cands = [',', ';', '\t', '|'];
+  let best = ',', n = -1;
+  for (const d of cands) { const c = head.split(d).length; if (c > n) { n = c; best = d; } }
+  return best;
+}
+function parseDelimited(text) {
+  text = text.replace(/^\uFEFF/, '');
+  const delim = detectDelim(text);
+  const rows = []; let row = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += c;
+    } else if (c === '"') inQ = true;
+    else if (c === delim) { row.push(field); field = ''; }
+    else if (c === '\n') { row.push(field); field = ''; rows.push(row); row = []; }
+    else if (c !== '\r') field += c;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.length > 1 || (r.length === 1 && r[0].trim() !== ''));
+}
+const DATE_RE = /^\d{4}[-/]\d{1,2}([-/]\d{1,2})?([T ]\d{1,2}:\d{2})?/;
+function looksNumeric(v) {
+  if (v === null || v === undefined) return false;
+  const s = String(v).trim().replace(/[%$€£,\s]/g, '');
+  return s !== '' && isFinite(Number(s));
+}
+function toNum(v) {
+  const s = String(v).trim().replace(/[%$€£,\s]/g, '');
+  const n = Number(s);
+  return isFinite(n) ? n : null;
+}
+
+/* ---------- dataset construction ---------- */
+function makeDataset(name, rawRows) {
+  if (!rawRows.length) throw new Error('empty file');
+  const header = rawRows[0].map((h, i) => (String(h).trim() || 'col_' + (i + 1)));
+  const seen = {};
+  const cols = header.map(h => { seen[h] = (seen[h] || 0) + 1; return seen[h] > 1 ? h + '_' + seen[h] : h; });
+  const body = rawRows.slice(1).filter(r => r.some(c => String(c).trim() !== ''));
+  return finalizeDataset(name, cols, body.map(r => {
+    const o = {}; cols.forEach((c, i) => { o[c] = r[i] === undefined ? '' : r[i]; }); return o;
+  }));
+}
+function makeDatasetFromObjects(name, arr) {
+  const cols = [];
+  arr.slice(0, 200).forEach(o => Object.keys(o).forEach(k => { if (cols.indexOf(k) < 0) cols.push(k); }));
+  return finalizeDataset(name, cols, arr.map(o => {
+    const r = {}; cols.forEach(c => { const v = o[c]; r[c] = (v && typeof v === 'object') ? JSON.stringify(v) : (v === undefined || v === null ? '' : v); }); return r;
+  }));
+}
+function finalizeDataset(name, cols, rows) {
+  const fields = cols.map(c => {
+    const vals = rows.map(r => r[c]);
+    const nonEmpty = vals.filter(v => v !== '' && v !== null && v !== undefined);
+    const sample = nonEmpty.slice(0, 400);
+    const numShare = sample.length ? sample.filter(looksNumeric).length / sample.length : 0;
+    const dateShare = sample.length ? sample.filter(v => DATE_RE.test(String(v).trim()) && !isNaN(Date.parse(v))).length / sample.length : 0;
+    let type = 'category';
+    if (dateShare >= 0.9 && numShare < 0.9) type = 'date';
+    else if (numShare >= 0.9) type = 'number';
+    return { name: c, type: type };
+  });
+  // coerce in place
+  rows.forEach(r => fields.forEach(f => {
+    const v = r[f.name];
+    if (v === '' || v === null || v === undefined) { r[f.name] = null; return; }
+    if (f.type === 'number') r[f.name] = toNum(v);
+    else if (f.type === 'date') { const t = Date.parse(v); r[f.name] = isFinite(t) ? t : null; }
+    else r[f.name] = String(v).trim();
+  }));
+  fields.forEach(f => {
+    const vals = rows.map(r => r[f.name]);
+    const missing = vals.filter(v => v === null).length;
+    const st = { missing: missing, missingPct: rows.length ? missing / rows.length : 0 };
+    if (f.type === 'number' || f.type === 'date') {
+      const nums = vals.filter(v => v !== null && isFinite(v)).sort((a, b) => a - b);
+      st.min = nums[0]; st.max = nums[nums.length - 1];
+      st.mean = S.mean(nums); st.std = S.std(nums);
+      st.p25 = S.quantile(nums, .25); st.median = S.quantile(nums, .5); st.p75 = S.quantile(nums, .75);
+      st.unique = new Set(nums).size;
+    } else {
+      const set = new Set(vals.filter(v => v !== null));
+      st.unique = set.size; st.top = S.mode(vals);
+      st.levels = Array.from(set).slice(0, 200);
+    }
+    f.stats = st;
+  });
+  return { id: uid(), name: name, fields: fields, rows: rows };
+}
+const getDS = id => State.datasets.find(d => d.id === id) || null;
+const colOf = (ds, name) => ds.rows.map(r => r[name]);
+
+/* ---------- ingestion ---------- */
+function ingestFile(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error('could not read ' + file.name));
+    fr.onload = () => {
+      try {
+        const txt = String(fr.result);
+        let ds;
+        if (/\.json$/i.test(file.name) || /^\s*[[{]/.test(txt.slice(0, 200))) {
+          let j = JSON.parse(txt);
+          if (!Array.isArray(j)) { const k = Object.keys(j).find(k2 => Array.isArray(j[k2])); if (!k) throw new Error('JSON must be an array of objects'); j = j[k]; }
+          ds = makeDatasetFromObjects(file.name.replace(/\.[^.]+$/, ''), j);
+        } else {
+          ds = makeDataset(file.name.replace(/\.[^.]+$/, ''), parseDelimited(txt));
+        }
+        if (!ds.rows.length) throw new Error('no data rows found');
+        resolve(ds);
+      } catch (e) { reject(new Error(file.name + ': ' + e.message)); }
+    };
+    fr.readAsText(file);
+  });
+}
+async function addFiles(files) {
+  for (const f of Array.from(files)) {
+    try {
+      const ds = await ingestFile(f);
+      State.datasets.push(ds); State.activeDS = ds.id;
+      toast('Loaded ' + ds.name + ' — ' + ds.rows.length + ' rows');
+    } catch (e) { toast(e.message, 4200); }
+  }
+  renderData(); syncModelForm(); renderRail();
+}
+
+/* ---------- demo table ---------- */
+function demoDataset() {
+  const rnd = mulberry32(7);
+  const districts = ['Centro', 'Norte', 'Sul', 'Leste', 'Oeste'];
+  const types = ['apartment', 'house', 'studio'];
+  const rows = [];
+  for (let i = 0; i < 600; i++) {
+    const area = Math.round(35 + rnd() * 210);
+    const rooms = Math.max(1, Math.round(area / 42 + (rnd() - .5) * 1.6));
+    const age = Math.round(rnd() * 45);
+    const dist = districts[Math.floor(rnd() * districts.length)];
+    const type = types[Math.floor(rnd() * types.length)];
+    const distMult = { Centro: 1.45, Norte: .92, Sul: 1.18, Leste: .85, Oeste: 1.02 }[dist];
+    const typeMult = { apartment: 1, house: 1.12, studio: .88 }[type];
+    const metro = Math.round((0.3 + rnd() * 4.5) * 10) / 10;
+    const noise = (rnd() - .5) * 90;
+    const price = Math.max(60, Math.round((area * 8.4 * distMult * typeMult + rooms * 22 - age * 3.1 - metro * 14 + noise)));
+    rows.push({
+      area_m2: area, rooms: rooms, age_years: age, district: dist, property_type: type,
+      metro_km: metro, has_parking: rnd() > .45 ? 'yes' : 'no', price_k: price,
+      sold: price > 900 ? 'premium' : (price > 550 ? 'mid' : 'entry')
+    });
+  }
+  return makeDatasetFromObjects('demo_housing', rows);
+}
+
+/* ---------- data view ---------- */
+function renderRail() {
+  $('#railStats').textContent = State.datasets.length + ' table' + (State.datasets.length === 1 ? '' : 's') + ' · ' + State.runs.length + ' run' + (State.runs.length === 1 ? '' : 's');
+}
+function renderData() {
+  const list = $('#dsList');
+  $('#dsCount').textContent = State.datasets.length;
+  if (!State.datasets.length) { list.innerHTML = '<div class="empty">No tables yet.</div>'; $('#profile').innerHTML = '<div class="empty">Load a table to see column types, ranges and missing values.</div>'; $('#corrBox').innerHTML = '<div class="empty">—</div>'; $('#dsShape').textContent = ''; return; }
+  list.innerHTML = State.datasets.map(d => (
+    '<div class="ds ' + (d.id === State.activeDS ? 'on' : '') + '" data-ds="' + d.id + '">' +
+    '<div><div class="nm">' + esc(d.name) + '</div><div class="mt">' + d.rows.length + ' rows · ' + d.fields.length + ' cols · ' +
+    d.fields.filter(f => f.type === 'number').length + ' numeric</div></div>' +
+    '<button class="btn danger sm" data-del="' + d.id + '">Remove</button></div>'
+  )).join('');
+  $$('#dsList .ds').forEach(el => el.addEventListener('click', e => {
+    if (e.target.dataset.del) return;
+    State.activeDS = el.dataset.ds; renderData(); syncModelForm();
+  }));
+  $$('#dsList [data-del]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    const id = b.dataset.del;
+    State.datasets = State.datasets.filter(d => d.id !== id);
+    State.runs = State.runs.filter(r => r.cfg.datasetId !== id);
+    if (State.activeDS === id) State.activeDS = State.datasets.length ? State.datasets[0].id : null;
+    renderData(); syncModelForm(); renderRuns(); renderStrip(); renderRail();
+  }));
+  renderProfile();
+}
+function renderProfile() {
+  const ds = getDS(State.activeDS);
+  if (!ds) return;
+  $('#dsShape').textContent = ds.rows.length + ' × ' + ds.fields.length;
+  const rowsHtml = ds.fields.map(f => {
+    const s = f.stats;
+    const tag = f.type === 'number' ? '<span class="tag teal">num</span>' : f.type === 'date' ? '<span class="tag mustard">date</span>' : '<span class="tag">text</span>';
+    const range = (f.type === 'number') ? fmt(s.min) + ' … ' + fmt(s.max)
+      : (f.type === 'date') ? new Date(s.min).toISOString().slice(0, 10) + ' … ' + new Date(s.max).toISOString().slice(0, 10)
+        : (s.top === null ? '—' : 'top: ' + esc(String(s.top)).slice(0, 22));
+    const mid = f.type === 'number' ? fmt(s.mean) : String(s.unique);
+    const miss = s.missingPct > 0.2 ? '<span class="tag coral">' + pct(s.missingPct, 0) + '</span>' : pct(s.missingPct, 0);
+    return '<tr><td>' + esc(f.name) + '</td><td>' + tag + '</td><td>' + range + '</td><td class="n">' + mid + '</td><td class="n">' + s.unique + '</td><td class="n">' + miss + '</td></tr>';
+  }).join('');
+  $('#profile').innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>Column</th><th>Type</th><th>Range / top value</th><th>Mean / levels</th><th>Unique</th><th>Missing</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+  renderCorr(ds); renderHistPicker(ds);
+}
+function corrColor(v) {
+  if (v === null) return '#f3f5f8';
+  const a = Math.min(1, Math.abs(v));
+  return v >= 0 ? 'rgba(47,62,168,' + (0.08 + a * 0.75) + ')' : 'rgba(214,58,86,' + (0.08 + a * 0.75) + ')';
+}
+function renderCorr(ds) {
+  const nums = ds.fields.filter(f => f.type === 'number').slice(0, 12);
+  if (nums.length < 2) { $('#corrBox').innerHTML = '<div class="empty">Needs at least two numeric columns.</div>'; return; }
+  const cols = nums.map(f => colOf(ds, f.name));
+  let html = '<div class="tbl-wrap" style="max-height:360px"><table class="cm"><thead><tr><th></th>' + nums.map(f => '<th style="font-family:var(--mono);font-size:10px">' + esc(f.name.slice(0, 9)) + '</th>').join('') + '</tr></thead><tbody>';
+  for (let i = 0; i < nums.length; i++) {
+    html += '<tr><th style="text-align:right;font-size:11px">' + esc(nums[i].name.slice(0, 14)) + '</th>';
+    for (let j = 0; j < nums.length; j++) {
+      const v = i === j ? 1 : S.corr(cols[i], cols[j]);
+      html += '<td class="cell" style="background:' + corrColor(v) + ';color:' + (v !== null && Math.abs(v) > .6 ? '#fff' : 'var(--ink)') + '">' + (v === null ? '—' : v.toFixed(2)) + '</td>';
+    }
+    html += '</tr>';
+  }
+  $('#corrBox').innerHTML = html + '</tbody></table></div><p style="font-size:11.5px;color:var(--mut);margin:8px 0 0">Pairs above |0.9| usually mean duplicated information — or a column that leaks the target.</p>';
+}
+function renderHistPicker(ds) {
+  const sel = $('#histCol');
+  const nums = ds.fields.filter(f => f.type === 'number' || f.type === 'date');
+  sel.innerHTML = nums.map(f => '<option value="' + esc(f.name) + '">' + esc(f.name) + '</option>').join('');
+  if (nums.length) drawHist(ds, nums[0].name);
+  else { destroyChart('histChart'); }
+}
+function histogram(values, bins) {
+  const v = values.filter(x => x !== null && isFinite(x)).sort((a, b) => a - b);
+  if (!v.length) return null;
+  const lo = v[0], hi = v[v.length - 1];
+  if (hi === lo) return { labels: [fmt(lo)], counts: [v.length] };
+  bins = bins || Math.min(24, Math.max(8, Math.round(Math.sqrt(v.length))));
+  const w = (hi - lo) / bins, counts = new Array(bins).fill(0);
+  v.forEach(x => { let i = Math.floor((x - lo) / w); if (i >= bins) i = bins - 1; counts[i]++; });
+  return { labels: counts.map((_, i) => fmt(lo + i * w, 2)), counts: counts, lo: lo, hi: hi, w: w };
+}
+function drawHist(ds, col) {
+  const f = ds.fields.find(x => x.name === col); if (!f) return;
+  const h = histogram(colOf(ds, col));
+  if (!h) { destroyChart('histChart'); return; }
+  makeChart('histChart', {
+    type: 'bar',
+    data: { labels: h.labels, datasets: [{ label: col, data: h.counts, backgroundColor: 'rgba(47,62,168,.72)', borderWidth: 0 }] },
+    options: baseOpts({ legend: false, xTitle: col, yTitle: 'rows' })
+  });
+}
+/* ============================================================
+   Part 2: chart plumbing + algorithm implementations.
+   Every algorithm here is written from scratch in plain JS —
+   no ML library is loaded, so what you see is what runs.
+   ============================================================ */
+const PAL = { blue: '#2f3ea8', coral: '#d63a56', teal: '#0d7f7f', mustard: '#a97a00', ink: '#0f1720', grid: '#e6ebf1', mut: '#6b7d8f' };
+const SERIES = ['#2f3ea8', '#d63a56', '#0d7f7f', '#a97a00', '#7b4fa8', '#2f7fa8', '#a8552f', '#4a7a2f'];
+
+function baseOpts(o) {
+  o = o || {};
+  const opt = {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    interaction: { mode: o.mode || 'nearest', intersect: o.intersect !== false },
+    plugins: {
+      legend: { display: o.legend !== false, position: 'top', align: 'end', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, color: PAL.mut } },
+      tooltip: { backgroundColor: PAL.ink, titleFont: { size: 11 }, bodyFont: { size: 11 }, padding: 8, callbacks: o.tooltip || {} }
+    }
+  };
+  if (!o.noScales) {
+    opt.scales = {
+      x: {
+        type: o.xType || 'category', beginAtZero: !!o.xZero,
+        title: { display: !!o.xTitle, text: o.xTitle || '', font: { size: 10 }, color: PAL.mut },
+        ticks: { font: { size: 10 }, color: PAL.mut, maxRotation: o.rotate || 0, autoSkip: true, maxTicksLimit: o.maxTicks || 12 },
+        grid: { color: PAL.grid, drawTicks: false }
+      },
+      y: {
+        beginAtZero: !!o.yZero, min: o.yMin, max: o.yMax,
+        title: { display: !!o.yTitle, text: o.yTitle || '', font: { size: 10 }, color: PAL.mut },
+        ticks: { font: { size: 10 }, color: PAL.mut }, grid: { color: PAL.grid, drawTicks: false }
+      }
+    };
+  }
+  if (o.indexAxis) opt.indexAxis = o.indexAxis;
+  return opt;
+}
+function destroyChart(id) { if (State.charts[id]) { State.charts[id].destroy(); delete State.charts[id]; } }
+function makeChart(id, cfg) {
+  if (!hasChart()) return null;
+  const el = document.getElementById(id); if (!el) return null;
+  destroyChart(id);
+  State.charts[id] = new Chart(el.getContext('2d'), cfg);
+  return State.charts[id];
+}
+/* render a chart offscreen and hand back a PNG data URL (used by the PDF builder) */
+function chartImage(cfg, w, h) {
+  if (!hasChart()) return null;
+  const stage = $('#stage');
+  const cv = document.createElement('canvas');
+  cv.width = w || 900; cv.height = h || 420;
+  stage.appendChild(cv);
+  const c = new Chart(cv.getContext('2d'), cfg);
+  c.update('none');
+  const url = cv.toDataURL('image/png', 1);
+  c.destroy(); cv.remove();
+  return url;
+}
+
+/* ============================================================
+   Linear algebra
+   ============================================================ */
+function zeros(n, m) { const a = new Array(n); for (let i = 0; i < n; i++) a[i] = new Array(m).fill(0); return a; }
+function solveLinear(A, b) {
+  const n = b.length;
+  const M = A.map((r, i) => r.slice().concat([b[i]]));
+  for (let c = 0; c < n; c++) {
+    let p = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+    if (Math.abs(M[p][c]) < 1e-11) continue;
+    const t = M[c]; M[c] = M[p]; M[p] = t;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = M[r][c] / M[c][c];
+      if (!f) continue;
+      for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k];
+    }
+  }
+  return M.map((r, i) => (Math.abs(r[i]) < 1e-11 ? 0 : r[n] / r[i]));
+}
+
+/* ============================================================
+   Linear / ridge regression
+   ============================================================ */
+function fitLinear(X, y, lambda) {
+  const n = X.length, p = X[0].length, d = p + 1;
+  const A = zeros(d, d), b = new Array(d).fill(0);
+  for (let i = 0; i < n; i++) {
+    const xi = X[i], yi = y[i];
+    for (let a = 0; a < d; a++) {
+      const va = a === p ? 1 : xi[a];
+      b[a] += va * yi;
+      for (let c = a; c < d; c++) { const vc = c === p ? 1 : xi[c]; A[a][c] += va * vc; }
+    }
+  }
+  for (let a = 0; a < d; a++) for (let c = 0; c < a; c++) A[a][c] = A[c][a];
+  for (let a = 0; a < p; a++) A[a][a] += (lambda || 0);
+  const w = solveLinear(A, b);
+  const coef = w.slice(0, p), b0 = w[p];
+  return {
+    kind: 'linear', coef: coef, intercept: b0,
+    predict: rows => rows.map(r => { let s = b0; for (let j = 0; j < p; j++) s += r[j] * coef[j]; return s; })
+  };
+}
+
+/* ============================================================
+   Logistic regression (one-vs-rest, L2, batch gradient descent)
+   ============================================================ */
+const sig = z => 1 / (1 + Math.exp(-Math.max(-30, Math.min(30, z))));
+function fitLogistic(X, y, K, hp) {
+  const n = X.length, p = X[0].length;
+  const lr = hp.lr, epochs = hp.epochs, l2 = hp.l2;
+  const W = [], B = [];
+  for (let k = 0; k < K; k++) {
+    let w = new Array(p).fill(0), b0 = 0;
+    for (let e = 0; e < epochs; e++) {
+      const gw = new Array(p).fill(0); let gb = 0;
+      for (let i = 0; i < n; i++) {
+        let z = b0; const xi = X[i];
+        for (let j = 0; j < p; j++) z += xi[j] * w[j];
+        const err = sig(z) - (y[i] === k ? 1 : 0);
+        for (let j = 0; j < p; j++) gw[j] += err * xi[j];
+        gb += err;
+      }
+      for (let j = 0; j < p; j++) w[j] -= lr * (gw[j] / n + l2 * w[j]);
+      b0 -= lr * gb / n;
+    }
+    W.push(w); B.push(b0);
+  }
+  const proba = rows => rows.map(r => {
+    const s = [];
+    for (let k = 0; k < K; k++) { let z = B[k]; for (let j = 0; j < p; j++) z += r[j] * W[k][j]; s.push(sig(z)); }
+    const tot = s.reduce((a, b) => a + b, 0) || 1;
+    return s.map(v => v / tot);
+  });
+  return { kind: 'logistic', W: W, B: B, predictProba: proba, predict: rows => proba(rows).map(pr => pr.indexOf(Math.max.apply(null, pr))) };
+}
+
+/* ============================================================
+   k-nearest neighbours
+   ============================================================ */
+function fitKNN(X, y, K, hp, task) {
+  const k = Math.max(1, Math.min(hp.k, X.length));
+  const weighted = hp.weight === 'distance';
+  function neigh(r) {
+    const arr = new Array(X.length);
+    for (let i = 0; i < X.length; i++) {
+      let d = 0; const xi = X[i];
+      for (let j = 0; j < r.length; j++) { const t = r[j] - xi[j]; d += t * t; }
+      arr[i] = { d: d, i: i };
+    }
+    arr.sort((a, b) => a.d - b.d);
+    return arr.slice(0, k);
+  }
+  if (task === 'regression') {
+    return { kind: 'knn', predict: rows => rows.map(r => {
+      const nb = neigh(r); let num = 0, den = 0;
+      nb.forEach(o => { const w = weighted ? 1 / (Math.sqrt(o.d) + 1e-9) : 1; num += w * y[o.i]; den += w; });
+      return num / den;
+    }) };
+  }
+  const proba = rows => rows.map(r => {
+    const nb = neigh(r); const c = new Array(K).fill(0);
+    nb.forEach(o => { const w = weighted ? 1 / (Math.sqrt(o.d) + 1e-9) : 1; c[y[o.i]] += w; });
+    const t = c.reduce((a, b) => a + b, 0) || 1;
+    return c.map(v => v / t);
+  });
+  return { kind: 'knn', predictProba: proba, predict: rows => proba(rows).map(pr => pr.indexOf(Math.max.apply(null, pr))) };
+}
+
+/* ============================================================
+   Gaussian naive Bayes
+   ============================================================ */
+function fitNB(X, y, K) {
+  const p = X[0].length;
+  const mean = zeros(K, p), vr = zeros(K, p), cnt = new Array(K).fill(0);
+  X.forEach((r, i) => { cnt[y[i]]++; for (let j = 0; j < p; j++) mean[y[i]][j] += r[j]; });
+  for (let k = 0; k < K; k++) for (let j = 0; j < p; j++) mean[k][j] /= (cnt[k] || 1);
+  X.forEach((r, i) => { for (let j = 0; j < p; j++) { const d = r[j] - mean[y[i]][j]; vr[y[i]][j] += d * d; } });
+  for (let k = 0; k < K; k++) for (let j = 0; j < p; j++) vr[k][j] = vr[k][j] / Math.max(1, cnt[k] - 1) + 1e-6;
+  const prior = cnt.map(c => Math.log((c + 1) / (X.length + K)));
+  const proba = rows => rows.map(r => {
+    const lg = [];
+    for (let k = 0; k < K; k++) {
+      let s = prior[k];
+      for (let j = 0; j < p; j++) { const d = r[j] - mean[k][j]; s += -0.5 * (Math.log(2 * Math.PI * vr[k][j]) + d * d / vr[k][j]); }
+      lg.push(s);
+    }
+    const mx = Math.max.apply(null, lg);
+    const ex = lg.map(v => Math.exp(v - mx));
+    const t = ex.reduce((a, b) => a + b, 0) || 1;
+    return ex.map(v => v / t);
+  });
+  return { kind: 'nb', predictProba: proba, predict: rows => proba(rows).map(pr => pr.indexOf(Math.max.apply(null, pr))) };
+}
+
+/* ============================================================
+   CART decision tree (exact sweep splits)
+   ============================================================ */
+function growTree(X, y, idx, opts, rnd, task, K, depth) {
+  const n = idx.length;
+  const leaf = () => {
+    if (task === 'regression') { let s = 0; for (const i of idx) s += y[i]; return { leaf: true, v: s / n, n: n }; }
+    const c = new Array(K).fill(0); for (const i of idx) c[y[i]]++;
+    return { leaf: true, p: c.map(v => v / n), n: n };
+  };
+  if (depth >= opts.maxDepth || n < opts.minSplit) return leaf();
+  if (task !== 'regression') { const first = y[idx[0]]; if (idx.every(i => y[i] === first)) return leaf(); }
+
+  const p = X[0].length;
+  let feats = [];
+  for (let j = 0; j < p; j++) feats.push(j);
+  if (opts.mtry && opts.mtry < p) feats = shuffled(feats, rnd).slice(0, opts.mtry);
+
+  let best = null;
+  for (const f of feats) {
+    const order = idx.slice().sort((a, b) => X[a][f] - X[b][f]);
+    if (X[order[0]][f] === X[order[n - 1]][f]) continue;
+    if (task === 'regression') {
+      let sl = 0, sql = 0, sr = 0, sqr = 0;
+      for (const i of order) { sr += y[i]; sqr += y[i] * y[i]; }
+      for (let t = 0; t < n - 1; t++) {
+        const i = order[t], yi = y[i];
+        sl += yi; sql += yi * yi; sr -= yi; sqr -= yi * yi;
+        const nl = t + 1, nr = n - nl;
+        if (nl < opts.minLeaf || nr < opts.minLeaf) continue;
+        if (X[order[t]][f] === X[order[t + 1]][f]) continue;
+        const sse = (sql - sl * sl / nl) + (sqr - sr * sr / nr);
+        if (!best || sse < best.score) best = { score: sse, f: f, thr: (X[order[t]][f] + X[order[t + 1]][f]) / 2 };
+      }
+    } else {
+      const cl = new Array(K).fill(0), cr = new Array(K).fill(0);
+      for (const i of order) cr[y[i]]++;
+      for (let t = 0; t < n - 1; t++) {
+        const i = order[t]; cl[y[i]]++; cr[y[i]]--;
+        const nl = t + 1, nr = n - nl;
+        if (nl < opts.minLeaf || nr < opts.minLeaf) continue;
+        if (X[order[t]][f] === X[order[t + 1]][f]) continue;
+        let gl = 1, gr = 1;
+        for (let k = 0; k < K; k++) { const a = cl[k] / nl, b = cr[k] / nr; gl -= a * a; gr -= b * b; }
+        const imp = (nl * gl + nr * gr) / n;
+        if (!best || imp < best.score) best = { score: imp, f: f, thr: (X[order[t]][f] + X[order[t + 1]][f]) / 2 };
+      }
+    }
+  }
+  if (!best) return leaf();
+  const L = [], R = [];
+  for (const i of idx) (X[i][best.f] <= best.thr ? L : R).push(i);
+  if (!L.length || !R.length) return leaf();
+  return {
+    leaf: false, f: best.f, thr: best.thr, n: n,
+    L: growTree(X, y, L, opts, rnd, task, K, depth + 1),
+    R: growTree(X, y, R, opts, rnd, task, K, depth + 1)
+  };
+}
+function treeWalk(node, r) { while (!node.leaf) node = (r[node.f] <= node.thr ? node.L : node.R); return node; }
+function treeDepth(node) { return node.leaf ? 1 : 1 + Math.max(treeDepth(node.L), treeDepth(node.R)); }
+function treeLeaves(node) { return node.leaf ? 1 : treeLeaves(node.L) + treeLeaves(node.R); }
+function treeRules(node, names, depth, out, path) {
+  out = out || []; depth = depth || 0;
+  if (depth > 3 || node.leaf) {
+    const val = node.leaf ? (node.v !== undefined ? fmt(node.v) : 'class ' + node.p.indexOf(Math.max.apply(null, node.p))) : '…';
+    out.push({ path: path || 'all rows', v: val, n: node.n });
+    return out;
+  }
+  const nm = names[node.f] || ('f' + node.f);
+  treeRules(node.L, names, depth + 1, out, (path ? path + ' & ' : '') + nm + ' ≤ ' + fmt(node.thr, 2));
+  treeRules(node.R, names, depth + 1, out, (path ? path + ' & ' : '') + nm + ' > ' + fmt(node.thr, 2));
+  return out;
+}
+function fitTree(X, y, K, hp, task, seed) {
+  const rnd = mulberry32(seed);
+  const idx = X.map((_, i) => i);
+  const opts = { maxDepth: hp.maxDepth, minSplit: hp.minSplit, minLeaf: hp.minLeaf || 1, mtry: 0 };
+  const root = growTree(X, y, idx, opts, rnd, task, K, 0);
+  const m = { kind: 'tree', root: root, depth: treeDepth(root), leaves: treeLeaves(root) };
+  if (task === 'regression') m.predict = rows => rows.map(r => treeWalk(root, r).v);
+  else { m.predictProba = rows => rows.map(r => treeWalk(root, r).p); m.predict = rows => m.predictProba(rows).map(pr => pr.indexOf(Math.max.apply(null, pr))); }
+  return m;
+}
+
+/* ============================================================
+   Random forest (bagging + feature subsampling)
+   ============================================================ */
+function fitForest(X, y, K, hp, task, seed) {
+  const rnd = mulberry32(seed);
+  const n = X.length, p = X[0].length;
+  const mtry = hp.mtry === 'sqrt' ? Math.max(1, Math.round(Math.sqrt(p))) : hp.mtry === 'third' ? Math.max(1, Math.round(p / 3)) : p;
+  const opts = { maxDepth: hp.maxDepth, minSplit: hp.minSplit, minLeaf: hp.minLeaf || 1, mtry: mtry };
+  const trees = [];
+  for (let b = 0; b < hp.trees; b++) {
+    const bag = new Array(n);
+    for (let i = 0; i < n; i++) bag[i] = Math.floor(rnd() * n);
+    trees.push(growTree(X, y, bag, opts, rnd, task, K, 0));
+  }
+  const m = { kind: 'forest', trees: trees, mtry: mtry };
+  if (task === 'regression') {
+    m.predict = rows => rows.map(r => { let s = 0; for (const t of trees) s += treeWalk(t, r).v; return s / trees.length; });
+  } else {
+    m.predictProba = rows => rows.map(r => {
+      const acc = new Array(K).fill(0);
+      for (const t of trees) { const lf = treeWalk(t, r); for (let k = 0; k < K; k++) acc[k] += lf.p[k]; }
+      return acc.map(v => v / trees.length);
+    });
+    m.predict = rows => m.predictProba(rows).map(pr => pr.indexOf(Math.max.apply(null, pr)));
+  }
+  return m;
+}
+
+/* ============================================================
+   Gradient boosted trees (regression, squared loss)
+   ============================================================ */
+function fitGBM(X, y, hp, seed) {
+  const rnd = mulberry32(seed);
+  const n = X.length;
+  const base = S.mean(y);
+  let F = new Array(n).fill(base);
+  const trees = [];
+  const opts = { maxDepth: hp.maxDepth, minSplit: hp.minSplit, minLeaf: hp.minLeaf || 1, mtry: 0 };
+  const allIdx = X.map((_, i) => i);
+  for (let m = 0; m < hp.rounds; m++) {
+    const res = new Array(n);
+    for (let i = 0; i < n; i++) res[i] = y[i] - F[i];
+    let idx = allIdx;
+    if (hp.subsample < 1) idx = shuffled(allIdx, rnd).slice(0, Math.max(8, Math.round(n * hp.subsample)));
+    const t = growTree(X, res, idx, opts, rnd, 'regression', 1, 0);
+    trees.push(t);
+    for (let i = 0; i < n; i++) F[i] += hp.lr * treeWalk(t, X[i]).v;
+  }
+  return {
+    kind: 'gbm', trees: trees, base: base,
+    predict: rows => rows.map(r => { let s = base; for (const t of trees) s += hp.lr * treeWalk(t, r).v; return s; })
+  };
+}
+
+/* ============================================================
+   k-means (k-means++ seeding, best of n_init)
+   ============================================================ */
+function dist2(a, b) { let s = 0; for (let i = 0; i < a.length; i++) { const d = a[i] - b[i]; s += d * d; } return s; }
+function kmeansOnce(X, k, rnd, iters) {
+  const n = X.length, p = X[0].length;
+  const cent = [X[Math.floor(rnd() * n)].slice()];
+  while (cent.length < k) {
+    const d = X.map(r => Math.min.apply(null, cent.map(c => dist2(r, c))));
+    const tot = d.reduce((a, b) => a + b, 0);
+    let t = rnd() * (tot || 1), pick = 0;
+    for (let i = 0; i < n; i++) { t -= d[i]; if (t <= 0) { pick = i; break; } }
+    cent.push(X[pick].slice());
+  }
+  let lab = new Array(n).fill(0);
+  for (let it = 0; it < iters; it++) {
+    let moved = false;
+    for (let i = 0; i < n; i++) {
+      let bi = 0, bd = Infinity;
+      for (let c = 0; c < k; c++) { const d = dist2(X[i], cent[c]); if (d < bd) { bd = d; bi = c; } }
+      if (lab[i] !== bi) { lab[i] = bi; moved = true; }
+    }
+    const sums = zeros(k, p), cnt = new Array(k).fill(0);
+    for (let i = 0; i < n; i++) { cnt[lab[i]]++; for (let j = 0; j < p; j++) sums[lab[i]][j] += X[i][j]; }
+    for (let c = 0; c < k; c++) if (cnt[c]) for (let j = 0; j < p; j++) cent[c][j] = sums[c][j] / cnt[c];
+    if (!moved && it > 0) break;
+  }
+  let inertia = 0;
+  for (let i = 0; i < n; i++) inertia += dist2(X[i], cent[lab[i]]);
+  return { cent: cent, lab: lab, inertia: inertia };
+}
+function fitKMeans(X, hp, seed) {
+  const rnd = mulberry32(seed);
+  let best = null;
+  for (let t = 0; t < (hp.nInit || 5); t++) {
+    const r = kmeansOnce(X, hp.k, rnd, hp.iters || 60);
+    if (!best || r.inertia < best.inertia) best = r;
+  }
+  const cent = best.cent;
+  return {
+    kind: 'kmeans', centroids: cent, labels: best.lab, inertia: best.inertia,
+    predict: rows => rows.map(r => { let bi = 0, bd = Infinity; for (let c = 0; c < cent.length; c++) { const d = dist2(r, cent[c]); if (d < bd) { bd = d; bi = c; } } return bi; })
+  };
+}
+function silhouette(X, lab, k, cap) {
+  const n = X.length;
+  const idx = n > (cap || 300) ? shuffled(X.map((_, i) => i), mulberry32(11)).slice(0, cap || 300) : X.map((_, i) => i);
+  let tot = 0, cnt = 0;
+  for (const i of idx) {
+    const sums = new Array(k).fill(0), cs = new Array(k).fill(0);
+    for (let j = 0; j < n; j++) { if (j === i) continue; const d = Math.sqrt(dist2(X[i], X[j])); sums[lab[j]] += d; cs[lab[j]]++; }
+    const a = cs[lab[i]] ? sums[lab[i]] / cs[lab[i]] : 0;
+    let b = Infinity;
+    for (let c = 0; c < k; c++) { if (c === lab[i] || !cs[c]) continue; b = Math.min(b, sums[c] / cs[c]); }
+    if (!isFinite(b)) continue;
+    tot += (b - a) / Math.max(a, b); cnt++;
+  }
+  return cnt ? tot / cnt : null;
+}
+
+/* ============================================================
+   PCA (power iteration, top 2 components) — used for 2-D views
+   ============================================================ */
+function pca2(X) {
+  const n = X.length, p = X[0].length;
+  const mu = new Array(p).fill(0);
+  X.forEach(r => r.forEach((v, j) => mu[j] += v / n));
+  const C = X.map(r => r.map((v, j) => v - mu[j]));
+  const cov = zeros(p, p);
+  for (const r of C) for (let a = 0; a < p; a++) for (let b = a; b < p; b++) cov[a][b] += r[a] * r[b] / Math.max(1, n - 1);
+  for (let a = 0; a < p; a++) for (let b = 0; b < a; b++) cov[a][b] = cov[b][a];
+  const rnd = mulberry32(3);
+  function power(M) {
+    let v = new Array(p).fill(0).map(() => rnd() - .5);
+    for (let it = 0; it < 120; it++) {
+      const w = new Array(p).fill(0);
+      for (let a = 0; a < p; a++) for (let b = 0; b < p; b++) w[a] += M[a][b] * v[b];
+      const nn = Math.sqrt(w.reduce((s, x) => s + x * x, 0)) || 1;
+      v = w.map(x => x / nn);
+    }
+    let lam = 0;
+    for (let a = 0; a < p; a++) for (let b = 0; b < p; b++) lam += v[a] * M[a][b] * v[b];
+    return { v: v, lam: lam };
+  }
+  const c1 = power(cov);
+  const def = cov.map((row, a) => row.map((x, b) => x - c1.lam * c1.v[a] * c1.v[b]));
+  const c2 = power(def);
+  const totVar = cov.reduce((s, r, i) => s + r[i], 0) || 1;
+  const proj = C.map(r => [
+    r.reduce((s, v, j) => s + v * c1.v[j], 0),
+    r.reduce((s, v, j) => s + v * c2.v[j], 0)
+  ]);
+  return { proj: proj, ev: [c1.lam / totVar, c2.lam / totVar], w1: c1.v, w2: c2.v };
+}
+/* ============================================================
+   Part 3: algorithm catalog, feature pipeline, metrics, runner.
+   ============================================================ */
+const ALGOS = {
+  linear: {
+    label: 'Linear regression (OLS)', tasks: ['regression'],
+    desc: 'Straight-line fit by least squares. Fast, fully interpretable coefficients, and a fair baseline — if nothing beats it, the relationship is probably linear.',
+    hp: []
+  },
+  ridge: {
+    label: 'Ridge regression (L2)', tasks: ['regression'],
+    desc: 'Least squares with a penalty on large coefficients. Use when predictors are correlated and plain OLS coefficients swing wildly.',
+    hp: [{ k: 'alpha', label: 'Penalty α', type: 'number', def: 1, min: 0, step: 0.1 }]
+  },
+  logistic: {
+    label: 'Logistic regression', tasks: ['classification'],
+    desc: 'Linear decision boundary with calibrated-ish probabilities, one-vs-rest for multi-class. Trained by gradient descent, so it needs standardised inputs.',
+    hp: [
+      { k: 'lr', label: 'Learning rate', type: 'number', def: 0.5, min: 0.001, step: 0.05 },
+      { k: 'epochs', label: 'Epochs', type: 'number', def: 300, min: 20, step: 20 },
+      { k: 'l2', label: 'L2 penalty', type: 'number', def: 0.01, min: 0, step: 0.01 }
+    ]
+  },
+  knn: {
+    label: 'k-nearest neighbours', tasks: ['regression', 'classification'],
+    desc: 'Predicts from the k most similar rows. No training, all the cost at prediction time; distances are meaningless unless inputs are standardised.',
+    hp: [
+      { k: 'k', label: 'Neighbours k', type: 'number', def: 7, min: 1, step: 1 },
+      { k: 'weight', label: 'Weighting', type: 'select', def: 'uniform', options: [['uniform', 'Uniform'], ['distance', 'By distance']] }
+    ]
+  },
+  nb: {
+    label: 'Gaussian naive Bayes', tasks: ['classification'],
+    desc: 'Assumes each feature is normally distributed and independent within a class. Crude, but strong on small samples and very fast.',
+    hp: []
+  },
+  tree: {
+    label: 'Decision tree (CART)', tasks: ['regression', 'classification'],
+    desc: 'Recursive binary splits. Reads like a set of rules, handles non-linearity, and overfits happily if you let it grow deep.',
+    hp: [
+      { k: 'maxDepth', label: 'Max depth', type: 'number', def: 6, min: 1, step: 1 },
+      { k: 'minSplit', label: 'Min rows to split', type: 'number', def: 10, min: 2, step: 1 },
+      { k: 'minLeaf', label: 'Min rows per leaf', type: 'number', def: 3, min: 1, step: 1 }
+    ]
+  },
+  forest: {
+    label: 'Random forest', tasks: ['regression', 'classification'],
+    desc: 'Many trees on bootstrapped rows and random feature subsets, averaged. Usually the strongest option here on tabular data, at the cost of interpretability.',
+    hp: [
+      { k: 'trees', label: 'Trees', type: 'number', def: 60, min: 5, step: 5 },
+      { k: 'maxDepth', label: 'Max depth', type: 'number', def: 10, min: 1, step: 1 },
+      { k: 'minSplit', label: 'Min rows to split', type: 'number', def: 6, min: 2, step: 1 },
+      { k: 'mtry', label: 'Features per split', type: 'select', def: 'sqrt', options: [['sqrt', '√p'], ['third', 'p/3'], ['all', 'all']] }
+    ]
+  },
+  gbm: {
+    label: 'Gradient boosting', tasks: ['regression'],
+    desc: 'Shallow trees fitted one after another on the previous errors. Often the accuracy winner; sensitive to learning rate and rounds.',
+    hp: [
+      { k: 'rounds', label: 'Rounds', type: 'number', def: 80, min: 5, step: 5 },
+      { k: 'lr', label: 'Learning rate', type: 'number', def: 0.1, min: 0.01, step: 0.01 },
+      { k: 'maxDepth', label: 'Max depth', type: 'number', def: 3, min: 1, step: 1 },
+      { k: 'subsample', label: 'Row subsample', type: 'number', def: 0.9, min: 0.2, max: 1, step: 0.1 }
+    ]
+  },
+  kmeans: {
+    label: 'k-means clustering', tasks: ['clustering'],
+    desc: 'Partitions rows into k spherical groups. Unsupervised: there is no accuracy, only cohesion and separation.',
+    hp: [
+      { k: 'k', label: 'Clusters k', type: 'number', def: 3, min: 2, step: 1 },
+      { k: 'nInit', label: 'Restarts', type: 'number', def: 5, min: 1, step: 1 }
+    ]
+  }
+};
+const algosFor = task => Object.keys(ALGOS).filter(a => ALGOS[a].tasks.indexOf(task) >= 0);
+const MAX_LEVELS = 12;
+
+/* ---------- encoders ---------- */
+function buildEncoders(rows, feats, ds, oneHot) {
+  return feats.map(f => {
+    const fld = ds.fields.find(x => x.name === f);
+    if (!fld) return null;
+    if (fld.type === 'number' || fld.type === 'date') return { f: f, kind: 'num', type: fld.type };
+    const counts = new Map();
+    rows.forEach(r => { const v = r[f] === null ? '(missing)' : String(r[f]); counts.set(v, (counts.get(v) || 0) + 1); });
+    const levels = Array.from(counts.keys()).sort((a, b) => counts.get(b) - counts.get(a));
+    if (oneHot && levels.length <= MAX_LEVELS) return { f: f, kind: 'onehot', levels: levels };
+    return { f: f, kind: 'ordinal', levels: levels, map: new Map(levels.map((l, i) => [l, i])) };
+  }).filter(Boolean);
+}
+function encoderColumns(enc) {
+  const names = [], groups = [];
+  enc.forEach(e => {
+    if (e.kind === 'onehot') e.levels.forEach(l => { names.push(e.f + '=' + l); groups.push(e.f); });
+    else { names.push(e.f); groups.push(e.f); }
+  });
+  return { names: names, groups: groups };
+}
+function encodeRow(r, enc) {
+  const out = [];
+  enc.forEach(e => {
+    const v = r[e.f];
+    if (e.kind === 'num') out.push(v === null || v === undefined || !isFinite(v) ? null : Number(v));
+    else if (e.kind === 'onehot') { const s = v === null || v === undefined ? '(missing)' : String(v); e.levels.forEach(l => out.push(s === l ? 1 : 0)); }
+    else { const s = v === null || v === undefined ? '(missing)' : String(v); const m = e.map.get(s); out.push(m === undefined ? e.levels.length : m); }
+  });
+  return out;
+}
+
+/* ---------- frame: encoded but not yet imputed/scaled ---------- */
+function buildFrame(ds, cfg) {
+  if (cfg.target) cfg.features = cfg.features.filter(f => f !== cfg.target);
+  let rows = ds.rows;
+  if (cfg.task !== 'clustering') rows = rows.filter(r => r[cfg.target] !== null && r[cfg.target] !== undefined && r[cfg.target] !== '');
+  if (!rows.length) throw new Error('every row is missing the target column');
+  const enc = buildEncoders(rows, cfg.features, ds, cfg.pp.onehot);
+  if (!enc.length) throw new Error('pick at least one feature column');
+  const cols = encoderColumns(enc);
+  const X = rows.map(r => encodeRow(r, enc));
+  let y = null, classes = null;
+  if (cfg.task === 'classification') {
+    const vals = Array.from(new Set(rows.map(r => String(r[cfg.target]))));
+    vals.sort((a, b) => (isFinite(a) && isFinite(b)) ? a - b : a.localeCompare(b));
+    classes = vals;
+    y = rows.map(r => vals.indexOf(String(r[cfg.target])));
+  } else if (cfg.task === 'regression') {
+    y = rows.map(r => Number(r[cfg.target]));
+    if (y.some(v => !isFinite(v))) throw new Error('target has non-numeric values — pick classification instead');
+  }
+  return { rows: rows, X: X, y: y, classes: classes, enc: enc, names: cols.names, groups: cols.groups, ds: ds };
+}
+
+/* ---------- split ---------- */
+function makeSplit(frame, cfg) {
+  const n = frame.X.length;
+  const testN = Math.max(1, Math.round(n * cfg.testSize));
+  const all = [];
+  for (let i = 0; i < n; i++) all.push(i);
+  if (cfg.splitMode === 'order') {
+    const dateF = frame.ds.fields.find(f => f.type === 'date');
+    let ord = all;
+    if (dateF) {
+      cfg.orderedBy = dateF.name;
+      ord = all.slice().sort((a, b) => {
+        const va = frame.rows[a][dateF.name], vb = frame.rows[b][dateF.name];
+        if (va === null) return 1; if (vb === null) return -1;
+        return va - vb;
+      });
+    }
+    return { tr: ord.slice(0, n - testN), te: ord.slice(n - testN) };
+  }
+  const rnd = mulberry32(cfg.seed);
+  if (cfg.splitMode === 'stratified' && frame.y && cfg.task === 'classification') {
+    const byC = {};
+    all.forEach(i => { (byC[frame.y[i]] = byC[frame.y[i]] || []).push(i); });
+    const tr = [], te = [];
+    Object.keys(byC).forEach(k => {
+      const g = shuffled(byC[k], rnd);
+      const cut = Math.max(1, Math.round(g.length * cfg.testSize));
+      te.push.apply(te, g.slice(0, cut)); tr.push.apply(tr, g.slice(cut));
+    });
+    return { tr: tr, te: te };
+  }
+  const sh = shuffled(all, rnd);
+  return { tr: sh.slice(testN), te: sh.slice(0, testN) };
+}
+
+/* ---------- impute + scale, fitted on training rows only ---------- */
+function materialize(frame, cfg, trIdx, teIdx) {
+  const p = frame.names.length;
+  const fill = new Array(p).fill(0);
+  for (let j = 0; j < p; j++) {
+    const vals = [];
+    for (const i of trIdx) { const v = frame.X[i][j]; if (v !== null && isFinite(v)) vals.push(v); }
+    vals.sort((a, b) => a - b);
+    fill[j] = cfg.pp.impute ? (S.quantile(vals, .5) || 0) : 0;
+  }
+  const mu = new Array(p).fill(0), sd = new Array(p).fill(1);
+  if (cfg.pp.scale) {
+    for (let j = 0; j < p; j++) {
+      const vals = trIdx.map(i => { const v = frame.X[i][j]; return v === null || !isFinite(v) ? fill[j] : v; });
+      mu[j] = S.mean(vals) || 0;
+      const s = S.std(vals);
+      sd[j] = (s && isFinite(s) && s > 1e-9) ? s : 1;
+    }
+  }
+  const tf = vec => {
+    const o = new Array(p);
+    for (let j = 0; j < p; j++) {
+      let v = vec[j];
+      if (v === null || v === undefined || !isFinite(v)) v = fill[j];
+      o[j] = cfg.pp.scale ? (v - mu[j]) / sd[j] : v;
+    }
+    return o;
+  };
+  return {
+    Xtr: trIdx.map(i => tf(frame.X[i])),
+    Xte: teIdx.map(i => tf(frame.X[i])),
+    ytr: frame.y ? trIdx.map(i => frame.y[i]) : null,
+    yte: frame.y ? teIdx.map(i => frame.y[i]) : null,
+    fill: fill, mu: mu, sd: sd, transform: tf
+  };
+}
+
+/* ---------- training dispatch ---------- */
+function trainModel(algo, hp, Xtr, ytr, K, task, seed) {
+  switch (algo) {
+    case 'linear': return fitLinear(Xtr, ytr, 0);
+    case 'ridge': return fitLinear(Xtr, ytr, Number(hp.alpha) || 0);
+    case 'logistic': return fitLogistic(Xtr, ytr, K, { lr: +hp.lr, epochs: +hp.epochs, l2: +hp.l2 });
+    case 'knn': return fitKNN(Xtr, ytr, K, { k: +hp.k, weight: hp.weight }, task);
+    case 'nb': return fitNB(Xtr, ytr, K);
+    case 'tree': return fitTree(Xtr, ytr, K, { maxDepth: +hp.maxDepth, minSplit: +hp.minSplit, minLeaf: +hp.minLeaf }, task, seed);
+    case 'forest': return fitForest(Xtr, ytr, K, { trees: +hp.trees, maxDepth: +hp.maxDepth, minSplit: +hp.minSplit, minLeaf: 1, mtry: hp.mtry }, task, seed);
+    case 'gbm': return fitGBM(Xtr, ytr, { rounds: +hp.rounds, lr: +hp.lr, maxDepth: +hp.maxDepth, minSplit: 6, subsample: +hp.subsample }, seed);
+    case 'kmeans': return fitKMeans(Xtr, { k: +hp.k, nInit: +hp.nInit }, seed);
+    default: throw new Error('unknown algorithm ' + algo);
+  }
+}
+
+/* ---------- metrics ---------- */
+function regMetrics(yT, yP) {
+  const n = yT.length;
+  const m = S.mean(yT);
+  let ssr = 0, sst = 0, abs = 0, ape = 0, apeN = 0, bias = 0;
+  for (let i = 0; i < n; i++) {
+    const e = yT[i] - yP[i];
+    ssr += e * e; sst += (yT[i] - m) * (yT[i] - m); abs += Math.abs(e); bias += -e;
+    if (Math.abs(yT[i]) > 1e-9) { ape += Math.abs(e / yT[i]); apeN++; }
+  }
+  return { n: n, r2: sst ? 1 - ssr / sst : null, rmse: Math.sqrt(ssr / n), mae: abs / n, mape: apeN ? ape / apeN : null, bias: bias / n };
+}
+function clsMetrics(yT, yP, proba, K) {
+  const cm = zeros(K, K);
+  for (let i = 0; i < yT.length; i++) cm[yT[i]][yP[i]]++;
+  const per = [];
+  let correct = 0, recSum = 0, recN = 0, f1sum = 0;
+  for (let k = 0; k < K; k++) {
+    const tp = cm[k][k];
+    let fp = 0, fn = 0;
+    for (let j = 0; j < K; j++) { if (j !== k) { fp += cm[j][k]; fn += cm[k][j]; } }
+    const prec = tp + fp ? tp / (tp + fp) : 0, rec = tp + fn ? tp / (tp + fn) : 0;
+    const f1 = prec + rec ? 2 * prec * rec / (prec + rec) : 0;
+    const sup = tp + fn;
+    per.push({ k: k, prec: prec, rec: rec, f1: f1, support: sup });
+    correct += tp;
+    if (sup) { recSum += rec; recN++; }
+    f1sum += f1;
+  }
+  const out = { n: yT.length, acc: correct / yT.length, balAcc: recN ? recSum / recN : null, macroF1: f1sum / K, cm: cm, per: per };
+  if (proba) {
+    let ll = 0;
+    for (let i = 0; i < yT.length; i++) ll += -Math.log(Math.max(1e-12, proba[i][yT[i]]));
+    out.logloss = ll / yT.length;
+    if (K === 2) out.auc = aucBinary(yT, proba.map(p => p[1]));
+  }
+  return out;
+}
+function aucBinary(yT, score) {
+  const pairs = score.map((s, i) => ({ s: s, y: yT[i] })).sort((a, b) => a.s - b.s);
+  let rank = 1, i = 0, sumPos = 0, nPos = 0, nNeg = 0;
+  while (i < pairs.length) {
+    let j = i; while (j + 1 < pairs.length && pairs[j + 1].s === pairs[i].s) j++;
+    const avg = (i + j + 2) / 2;
+    for (let t = i; t <= j; t++) { if (pairs[t].y === 1) { sumPos += avg; nPos++; } else nNeg++; }
+    i = j + 1; rank = j + 2;
+  }
+  if (!nPos || !nNeg) return null;
+  return (sumPos - nPos * (nPos + 1) / 2) / (nPos * nNeg);
+}
+function rocCurve(yT, score) {
+  const pts = score.map((s, i) => ({ s: s, y: yT[i] })).sort((a, b) => b.s - a.s);
+  const P = yT.filter(v => v === 1).length, N = yT.length - P;
+  let tp = 0, fp = 0;
+  const out = [{ x: 0, y: 0 }];
+  pts.forEach(o => { if (o.y === 1) tp++; else fp++; out.push({ x: N ? fp / N : 0, y: P ? tp / P : 0 }); });
+  return out;
+}
+function primaryOf(run) {
+  if (run.cfg.task === 'regression') return { key: 'r2', label: 'R²', value: run.test.r2, higher: true };
+  if (run.cfg.task === 'classification') return { key: 'acc', label: 'Accuracy', value: run.test.acc, higher: true };
+  return { key: 'sil', label: 'Silhouette', value: run.test.silhouette, higher: true };
+}
+
+/* ---------- permutation importance (model agnostic) ---------- */
+function permImportance(model, mat, frame, cfg, K) {
+  const feats = [];
+  frame.groups.forEach(g => { if (feats.indexOf(g) < 0) feats.push(g); });
+  const rnd = mulberry32(cfg.seed + 99);
+  const CAP = 400;
+  let sub = mat.Xte.map((_, i) => i);
+  if (sub.length > CAP) sub = shuffled(sub, rnd).slice(0, CAP);
+  const Xs = sub.map(i => mat.Xte[i]), ys = sub.map(i => mat.yte[i]);
+  const score = (X) => {
+    const p = model.predict(X);
+    return cfg.task === 'regression' ? regMetrics(ys, p).r2 : clsMetrics(ys, p, null, K).acc;
+  };
+  const base = score(Xs);
+  const reps = Xs.length > 200 ? 2 : 3;
+  return feats.map(f => {
+    const cols = [];
+    frame.groups.forEach((g, j) => { if (g === f) cols.push(j); });
+    const drops = [];
+    for (let r = 0; r < reps; r++) {
+      const order = shuffled(Xs.map((_, i) => i), rnd);
+      const Xp = Xs.map(row => row.slice());
+      for (let i = 0; i < Xp.length; i++) for (const c of cols) Xp[i][c] = Xs[order[i]][c];
+      drops.push(base - score(Xp));
+    }
+    return { name: f, imp: S.mean(drops), sd: S.std(drops) };
+  }).sort((a, b) => b.imp - a.imp);
+}
+
+/* ---------- cross-validation ---------- */
+function crossValidate(frame, cfg, K) {
+  const folds = cfg.cv, n = frame.X.length;
+  const idx = shuffled(frame.X.map((_, i) => i), mulberry32(cfg.seed + 5));
+  const scores = [];
+  for (let f = 0; f < folds; f++) {
+    const te = idx.filter((_, i) => i % folds === f);
+    const tr = idx.filter((_, i) => i % folds !== f);
+    if (!te.length || !tr.length) continue;
+    const mat = materialize(frame, cfg, tr, te);
+    const m = trainModel(cfg.algo, cfg.hp, mat.Xtr, mat.ytr, K, cfg.task, cfg.seed + f);
+    const pred = m.predict(mat.Xte);
+    scores.push(cfg.task === 'regression' ? regMetrics(mat.yte, pred).r2 : clsMetrics(mat.yte, pred, null, K).acc);
+  }
+  return { mean: S.mean(scores), sd: S.std(scores), folds: scores };
+}
+
+/* ---------- run one scenario ---------- */
+function runScenario(cfg) {
+  const t0 = performance.now();
+  const ds = getDS(cfg.datasetId);
+  if (!ds) throw new Error('table not found');
+  const frame = buildFrame(ds, cfg);
+  const K = frame.classes ? frame.classes.length : 1;
+  if (cfg.task === 'classification' && K < 2) throw new Error('the target column has a single value — nothing to classify');
+
+  const run = { id: uid(), cfg: cfg, ds: ds, frame: frame, K: K, created: new Date() };
+
+  if (cfg.task === 'clustering') {
+    const all = frame.X.map((_, i) => i);
+    const mat = materialize(frame, cfg, all, all);
+    const model = trainModel(cfg.algo, cfg.hp, mat.Xtr, null, 1, cfg.task, cfg.seed);
+    const lab = model.labels || model.predict(mat.Xtr);
+    const sil = silhouette(mat.Xtr, lab, +cfg.hp.k, 300);
+    const sizes = new Array(+cfg.hp.k).fill(0); lab.forEach(l => sizes[l]++);
+    const elbow = [];
+    for (let k = 2; k <= Math.min(9, Math.max(3, +cfg.hp.k + 3)); k++) elbow.push({ k: k, inertia: fitKMeans(mat.Xtr, { k: k, nInit: 3 }, cfg.seed).inertia });
+    run.model = model; run.mat = mat; run.labels = lab;
+    run.test = { silhouette: sil, inertia: model.inertia, sizes: sizes, elbow: elbow, n: lab.length };
+    run.train = run.test;
+    run.pca = pca2(mat.Xtr);
+    run.ms = Math.round(performance.now() - t0);
+    return run;
+  }
+
+  const sp = makeSplit(frame, cfg);
+  const mat = materialize(frame, cfg, sp.tr, sp.te);
+  const model = trainModel(cfg.algo, cfg.hp, mat.Xtr, mat.ytr, K, cfg.task, cfg.seed);
+  const predTe = model.predict(mat.Xte), predTr = model.predict(mat.Xtr);
+  const probTe = model.predictProba ? model.predictProba(mat.Xte) : null;
+
+  if (cfg.task === 'regression') {
+    run.test = regMetrics(mat.yte, predTe);
+    run.train = regMetrics(mat.ytr, predTr);
+  } else {
+    run.test = clsMetrics(mat.yte, predTe, probTe, K);
+    run.train = clsMetrics(mat.ytr, predTr, null, K);
+    if (probTe && K === 2) run.roc = rocCurve(mat.yte, probTe.map(p => p[1]));
+  }
+  run.pred = { te: predTe, tr: predTr, probTe: probTe };
+  run.split = sp; run.mat = mat; run.model = model;
+  run.importance = permImportance(model, mat, frame, cfg, K);
+  if (cfg.cv > 1) { try { run.cv = crossValidate(frame, cfg, K); } catch (e) { run.cv = null; } }
+  run.ms = Math.round(performance.now() - t0);
+  return run;
+}
+
+/* ---------- automatic warnings: the things that quietly ruin models ---------- */
+function auditRun(run) {
+  const out = [], cfg = run.cfg, f = run.frame;
+  const n = f.X.length;
+  if (n < 100) out.push({ lvl: 'warn', t: 'Small sample', m: n + ' usable rows. Metrics on a hold-out this size move several points just from the random seed. Treat any ranking between models as provisional.' });
+  if (f.names.length > n / 5) out.push({ lvl: 'warn', t: 'Wide relative to tall', m: f.names.length + ' encoded columns against ' + n + ' rows. Flexible models will memorise noise here.' });
+  if (cfg.task !== 'clustering') {
+    const p = primaryOf(run);
+    const trv = cfg.task === 'regression' ? run.train.r2 : run.train.acc;
+    const gap = trv - p.value;
+    if (gap > 0.15) out.push({ lvl: 'bad', t: 'Overfitting', m: 'Training ' + p.label + ' is ' + fmt(gap, 3) + ' above test. The model has learned rows, not patterns — reduce depth, raise minimum leaf size, or add data.' });
+    if (p.value !== null && p.value > 0.985) out.push({ lvl: 'bad', t: 'Suspiciously perfect', m: p.label + ' of ' + fmt(p.value, 3) + ' on held-out rows usually means leakage: a feature that encodes the answer, or duplicated rows spanning the split.' });
+  }
+  if (cfg.task === 'classification') {
+    const cnt = new Array(run.K).fill(0); f.y.forEach(v => cnt[v]++);
+    const maxShare = Math.max.apply(null, cnt) / f.y.length;
+    if (maxShare > 0.8) out.push({ lvl: 'warn', t: 'Imbalanced classes', m: 'The largest class is ' + pct(maxShare, 0) + ' of rows, so accuracy of ' + pct(maxShare, 0) + ' is achievable by always guessing it. Read balanced accuracy and macro F1 instead.' });
+    const smallest = Math.min.apply(null, cnt);
+    if (smallest < 10) out.push({ lvl: 'warn', t: 'Rare class', m: 'One class has only ' + smallest + ' rows. Per-class metrics for it are near-meaningless.' });
+  }
+  if (cfg.task === 'regression' && run.test.r2 !== null && run.test.r2 < 0) out.push({ lvl: 'bad', t: 'Worse than the mean', m: 'A negative R² means predicting the average of the training target would have beaten this model on the test rows.' });
+  // leakage sniff: a single feature carrying nearly all the signal
+  if (run.importance && run.importance.length > 1) {
+    const tot = run.importance.reduce((s, x) => s + Math.max(0, x.imp), 0);
+    if (tot > 0 && Math.max(0, run.importance[0].imp) / tot > 0.9 && run.importance.length > 2) {
+      out.push({ lvl: 'warn', t: 'One feature does everything', m: '"' + run.importance[0].name + '" accounts for over 90% of measured importance. Check that it is genuinely available before the outcome is known.' });
+    }
+  }
+  if (cfg.splitMode !== 'order' && run.ds.fields.some(fl => fl.type === 'date')) {
+    out.push({ lvl: 'warn', t: 'Date column present, random split used', m: 'With time-ordered data a random split lets the model see the future. Switch the split to chronological to get an honest estimate.' });
+  }
+  if (cfg.pp.scale === false && ['knn', 'logistic', 'kmeans'].indexOf(cfg.algo) >= 0) {
+    out.push({ lvl: 'bad', t: 'Unscaled distances', m: ALGOS[cfg.algo].label + ' compares raw magnitudes, so the column with the largest units dominates. Turn standardisation back on.' });
+  }
+  return out;
+}
+
+/* ---------- rough runtime estimate, in ms ---------- */
+function costEstimate(n, p, algo, hp) {
+  const tree = d => n * Math.log2(Math.max(2, n)) * p * 5.6e-5 * Math.min(1, d / 8 + .3);
+  switch (algo) {
+    case 'linear': case 'ridge': case 'nb': return n * p * p * 2e-5 + 5;
+    case 'logistic': return n * p * (+hp.epochs || 300) * 3e-6;
+    case 'knn': return n * n * p * 4e-6;
+    case 'tree': return tree(+hp.maxDepth || 6) * 8;
+    case 'forest': return tree(+hp.maxDepth || 10) * (+hp.trees || 60) * 1.1;
+    case 'gbm': return tree(+hp.maxDepth || 3) * (+hp.rounds || 80) * 1.1;
+    case 'kmeans': return n * p * (+hp.k || 3) * (+hp.nInit || 5) * 6e-4;
+    default: return 100;
+  }
+}
+/* ============================================================
+   Part 4: model setup form, scenario list, analytics views.
+   ============================================================ */
+function detectTask(ds, target) {
+  const f = ds.fields.find(x => x.name === target);
+  if (!f) return 'regression';
+  if (f.type === 'category' || f.type === 'date') return 'classification';
+  return f.stats.unique <= 12 ? 'classification' : 'regression';
+}
+function currentTask() {
+  const ds = getDS($('#cfgDataset').value);
+  const t = $('#cfgTask').value;
+  if (t !== 'auto') return t;
+  return ds ? detectTask(ds, $('#cfgTarget').value) : 'regression';
+}
+function syncModelForm() {
+  const dsSel = $('#cfgDataset');
+  dsSel.innerHTML = State.datasets.map(d => '<option value="' + d.id + '">' + esc(d.name) + '</option>').join('');
+  if (State.activeDS) dsSel.value = State.activeDS;
+  const ds = getDS(dsSel.value);
+  if (!ds) { $('#featList').innerHTML = '<div class="empty">Load a table first.</div>'; return; }
+  State.activeDS = ds.id;
+
+  const tSel = $('#cfgTarget'), prev = tSel.value;
+  tSel.innerHTML = ds.fields.map(f => '<option value="' + esc(f.name) + '">' + esc(f.name) + ' · ' + f.type + '</option>').join('');
+  if (prev && ds.fields.some(f => f.name === prev)) tSel.value = prev;
+  else {
+    const guess = ds.fields.filter(f => f.type === 'number').slice(-1)[0] || ds.fields[ds.fields.length - 1];
+    tSel.value = guess.name;
+  }
+  const task = currentTask();
+  tSel.disabled = task === 'clustering';
+  syncFeatures(ds, task);
+  syncAlgos(task);
+}
+function syncFeatures(ds, task) {
+  const target = $('#cfgTarget').value;
+  const box = $('#featList');
+  const chosen = new Set($$('#featList input:checked').map(i => i.value));
+  const first = !box.dataset.ready;
+  box.dataset.ready = '1';
+  box.innerHTML = ds.fields.filter(f => task === 'clustering' || f.name !== target).map(f => {
+    const on = first ? (f.stats.missingPct < 0.6) : chosen.has(f.name);
+    const tag = f.type === 'number' ? '<span class="tag teal">num</span>' : f.type === 'date' ? '<span class="tag mustard">date</span>' : '<span class="tag">' + f.stats.unique + ' levels</span>';
+    return '<label class="checkbox"><input type="checkbox" value="' + esc(f.name) + '" ' + (on ? 'checked' : '') + '><span>' + esc(f.name) + ' ' + tag + (f.stats.missingPct > .2 ? ' <span class="tag coral">' + pct(f.stats.missingPct, 0) + ' missing</span>' : '') + '</span></label>';
+  }).join('') || '<div class="empty">No columns available.</div>';
+}
+function syncAlgos(task) {
+  const sel = $('#cfgAlgo'), prev = sel.value;
+  const list = algosFor(task);
+  sel.innerHTML = list.map(a => '<option value="' + a + '">' + ALGOS[a].label + '</option>').join('');
+  if (list.indexOf(prev) >= 0) sel.value = prev;
+  $('#algoFamily').textContent = task;
+  syncHyper();
+}
+function syncHyper() {
+  const a = ALGOS[$('#cfgAlgo').value];
+  if (!a) return;
+  $('#algoDesc').textContent = a.desc;
+  const cur = {};
+  $$('#hyper [data-hp]').forEach(el => cur[el.dataset.hp] = el.value);
+  $('#hyper').innerHTML = a.hp.length ? a.hp.map(h => {
+    const v = cur[h.k] !== undefined ? cur[h.k] : h.def;
+    if (h.type === 'select') return '<label class="field"><span class="eyebrow">' + h.label + '</span><select data-hp="' + h.k + '">' + h.options.map(o => '<option value="' + o[0] + '" ' + (String(v) === o[0] ? 'selected' : '') + '>' + o[1] + '</option>').join('') + '</select></label>';
+    return '<label class="field"><span class="eyebrow">' + h.label + '</span><input type="number" data-hp="' + h.k + '" value="' + v + '" min="' + (h.min !== undefined ? h.min : '') + '" step="' + (h.step || 1) + '"></label>';
+  }).join('') : '<p style="font-size:12.5px;color:var(--mut);margin:0">Nothing to tune — this one has no knobs.</p>';
+}
+function readConfig() {
+  const task = currentTask();
+  const hp = {};
+  $$('#hyper [data-hp]').forEach(el => hp[el.dataset.hp] = el.value);
+  const algo = $('#cfgAlgo').value;
+  const feats = $$('#featList input:checked').map(i => i.value);
+  const name = $('#cfgName').value.trim();
+  return {
+    datasetId: $('#cfgDataset').value,
+    task: task,
+    target: task === 'clustering' ? null : $('#cfgTarget').value,
+    features: feats,
+    algo: algo, hp: hp,
+    testSize: +$('#cfgSplit').value / 100,
+    splitMode: $('#cfgSplitMode').value,
+    seed: +$('#cfgSeed').value || 0,
+    cv: +$('#cfgCV').value,
+    pp: { scale: $('#ppScale').checked, impute: $('#ppImpute').checked, onehot: $('#ppOneHot').checked },
+    name: name || (ALGOS[algo].label + ' · ' + (task === 'clustering' ? 'k=' + hp.k : $('#cfgTarget').value))
+  };
+}
+function updateCostHint() {
+  const el = $('#costHint'); if (!el) return;
+  const ds = getDS($('#cfgDataset').value);
+  if (!ds) { el.innerHTML = ''; return; }
+  const feats = $$('#featList input:checked').map(i => i.value);
+  let p = 0;
+  feats.forEach(f => { const fl = ds.fields.find(x => x.name === f); if (!fl) return; p += (fl.type === 'category' && fl.stats.unique <= MAX_LEVELS) ? fl.stats.unique : 1; });
+  const hp = {}; $$('#hyper [data-hp]').forEach(x => hp[x.dataset.hp] = x.value);
+  const cv = +$('#cfgCV').value || 0;
+  const ms = costEstimate(ds.rows.length, Math.max(1, p), $('#cfgAlgo').value, hp) * (cv > 1 ? cv + 1 : 1);
+  el.innerHTML = ms > 2500
+    ? '<div class="note warn"><b>Heavy run — roughly ' + Math.max(3, Math.round(ms / 1000)) + ' seconds.</b> Everything executes on this page\'s single thread, so the tab will stop responding until it finishes. Fewer trees or rounds, fewer columns, or a sampled table will bring that down.</div>'
+    : '';
+}
+function doRun(cfg) {
+  const msg = $('#runMsg');
+  try {
+    const run = runScenario(cfg);
+    State.runs.unshift(run);
+    State.activeRun = run.id;
+    const p = primaryOf(run);
+    msg.innerHTML = '<div class="note ok"><b>' + esc(cfg.name) + '</b> finished in ' + run.ms + ' ms — ' + p.label + ' ' + fmt(p.value, 4) + ' on ' + (run.test.n || 0) + ' held-out rows. Open Analytics for the breakdown.</div>';
+    renderStrip(); renderRuns(); renderRail(); renderReportList(); renderFindings();
+    return run;
+  } catch (e) {
+    msg.innerHTML = '<div class="note bad"><b>Run failed.</b> ' + esc(e.message) + '</div>';
+    return null;
+  }
+}
+function sweepAll() {
+  const base = readConfig();
+  const list = algosFor(base.task);
+  let ok = 0;
+  list.forEach(a => {
+    const hp = {};
+    ALGOS[a].hp.forEach(h => hp[h.k] = h.def);
+    const cfg = Object.assign({}, base, { algo: a, hp: hp, name: ALGOS[a].label + ' · defaults' });
+    try { const r = runScenario(cfg); State.runs.unshift(r); ok++; } catch (e) { /* skip */ }
+  });
+  $('#runMsg').innerHTML = '<div class="note"><b>' + ok + ' algorithms run</b> on default settings for a first read. Defaults are a starting point, not a tuned comparison — the leaderboard order can change once you tune.</div>';
+  renderStrip(); renderRuns(); renderRail(); renderReportList(); renderFindings();
+  show('runs');
+}
+
+/* ---------- run strip ---------- */
+function renderStrip() {
+  const el = $('#strip');
+  if (!State.runs.length) { el.innerHTML = ''; return; }
+  el.innerHTML = State.runs.slice(0, 24).map(r => {
+    const p = primaryOf(r);
+    const v = p.value === null || p.value === undefined ? 0 : Math.max(0, Math.min(1, p.value));
+    const col = v > .8 ? PAL.teal : v > .5 ? PAL.blue : PAL.coral;
+    return '<button class="chip ' + (r.id === State.activeRun ? 'on' : '') + '" data-run="' + r.id + '">' +
+      '<button class="kill" data-kill="' + r.id + '" title="Remove run">×</button>' +
+      '<div class="cname">' + esc(r.cfg.name) + '</div>' +
+      '<div class="cmeta">' + esc(r.ds.name) + ' · ' + r.cfg.task.slice(0, 5) + '</div>' +
+      '<div class="cscore" style="color:' + col + '">' + fmt(p.value, 3) + ' <span style="font-size:10px;color:var(--mut)">' + p.label + '</span></div>' +
+      '<svg class="spark" width="52" height="6"><rect width="52" height="6" rx="1" fill="#eceff3"/><rect width="' + (52 * v) + '" height="6" rx="1" fill="' + col + '"/></svg>' +
+      '</button>';
+  }).join('');
+  $$('#strip .chip').forEach(c => c.addEventListener('click', e => {
+    if (e.target.dataset.kill) return;
+    State.activeRun = c.dataset.run;
+    renderStrip();
+    if (State.view === 'analytics') renderAnalytics();
+    else if (State.view === 'project') renderProjection();
+    else show('analytics');
+  }));
+  $$('#strip [data-kill]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    State.runs = State.runs.filter(r => r.id !== b.dataset.kill);
+    if (State.activeRun === b.dataset.kill) State.activeRun = State.runs.length ? State.runs[0].id : null;
+    renderStrip(); renderRuns(); renderRail(); renderReportList(); renderFindings();
+    if (State.view === 'analytics') renderAnalytics();
+  }));
+}
+
+/* ---------- leaderboard ---------- */
+function renderRuns() {
+  $('#runCount').textContent = State.runs.length + ' run' + (State.runs.length === 1 ? '' : 's');
+  const box = $('#runTable');
+  if (!State.runs.length) { box.innerHTML = '<div class="empty">No runs yet. Set one up in step 02.</div>'; destroyChart('cmpChart'); destroyChart('gapChart'); return; }
+  const sorted = State.runs.slice().sort((a, b) => (primaryOf(b).value || -9) - (primaryOf(a).value || -9));
+  const bestId = sorted[0].id;
+  const rows = sorted.map(r => {
+    const p = primaryOf(r);
+    const trv = r.cfg.task === 'regression' ? r.train.r2 : r.cfg.task === 'classification' ? r.train.acc : null;
+    const gap = trv !== null && p.value !== null ? trv - p.value : null;
+    const sec = r.cfg.task === 'regression' ? 'RMSE ' + fmt(r.test.rmse, 3)
+      : r.cfg.task === 'classification' ? 'F1 ' + fmt(r.test.macroF1, 3)
+        : 'inertia ' + fmt(r.test.inertia, 1);
+    return '<tr class="' + (r.id === bestId ? 'best' : '') + '" data-run="' + r.id + '">' +
+      '<td><b>' + esc(r.cfg.name) + '</b></td>' +
+      '<td>' + esc(r.ds.name) + '</td>' +
+      '<td><span class="tag grey">' + r.cfg.task + '</span></td>' +
+      '<td>' + esc(r.cfg.target || '—') + '</td>' +
+      '<td class="n">' + r.cfg.features.length + '</td>' +
+      '<td class="n"><b>' + fmt(p.value, 4) + '</b></td>' +
+      '<td class="n">' + sec + '</td>' +
+      '<td class="n">' + (gap === null ? '—' : (gap > .15 ? '<span class="tag coral">' + fmt(gap, 3) + '</span>' : fmt(gap, 3))) + '</td>' +
+      '<td class="n">' + (r.cv ? fmt(r.cv.mean, 3) + ' ±' + fmt(r.cv.sd, 3) : '—') + '</td>' +
+      '<td class="n">' + r.ms + ' ms</td>' +
+      '<td><button class="btn quiet sm" data-open="' + r.id + '">Open</button></td></tr>';
+  }).join('');
+  box.innerHTML = '<table><thead><tr><th>Scenario</th><th>Table</th><th>Task</th><th>Target</th><th>Feats</th><th>Primary</th><th>Secondary</th><th>Train−test gap</th><th>CV</th><th>Time</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+  $$('#runTable [data-open]').forEach(b => b.addEventListener('click', () => { State.activeRun = b.dataset.open; renderStrip(); show('analytics'); }));
+
+  const labels = sorted.map(r => r.cfg.name.slice(0, 26));
+  makeChart('cmpChart', {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ label: 'Primary metric (test)', data: sorted.map(r => primaryOf(r).value), backgroundColor: sorted.map(r => r.id === bestId ? PAL.blue : 'rgba(47,62,168,.35)'), borderWidth: 0 }] },
+    options: baseOpts({ indexAxis: 'y', legend: false, xTitle: 'higher is better', maxTicks: 20 })
+  });
+  const withGap = sorted.filter(r => r.cfg.task !== 'clustering');
+  makeChart('gapChart', {
+    type: 'bar',
+    data: {
+      labels: withGap.map(r => r.cfg.name.slice(0, 26)),
+      datasets: [
+        { label: 'Train', data: withGap.map(r => r.cfg.task === 'regression' ? r.train.r2 : r.train.acc), backgroundColor: 'rgba(13,127,127,.55)' },
+        { label: 'Test', data: withGap.map(r => r.cfg.task === 'regression' ? r.test.r2 : r.test.acc), backgroundColor: PAL.coral }
+      ]
+    },
+    options: baseOpts({ indexAxis: 'y', maxTicks: 20, xTitle: 'a wide gap = memorising the training rows' })
+  });
+}
+
+/* ---------- analytics ---------- */
+function metricCard(k, v, s, cls) {
+  return '<div class="metric ' + (cls || '') + '"><div class="k">' + k + '</div><div class="v">' + v + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>';
+}
+function renderAnalytics() {
+  const sel = $('#anPick');
+  sel.innerHTML = State.runs.map(r => '<option value="' + r.id + '">' + esc(r.cfg.name) + ' · ' + esc(r.ds.name) + '</option>').join('');
+  const run = State.runs.find(r => r.id === State.activeRun) || State.runs[0];
+  if (!run) { $('#anBody').innerHTML = '<div class="panel"><div class="empty"><div class="eyebrow">Nothing selected</div>Run a scenario first.</div></div>'; return; }
+  sel.value = run.id; State.activeRun = run.id;
+  const audit = auditRun(run);
+  const notes = audit.map(a => '<div class="note ' + (a.lvl === 'bad' ? 'bad' : 'warn') + '"><b>' + a.t + ':</b> ' + a.m + '</div>').join('');
+  const head = '<div class="panel"><header><h3>' + esc(run.cfg.name) + '</h3><span class="eyebrow">' + esc(run.ds.name) + ' · ' + run.frame.X.length + ' usable rows · ' + run.frame.names.length + ' encoded columns · seed ' + run.cfg.seed + '</span></header><div class="body">' +
+    (notes || '<div class="note ok">No structural warnings fired for this run.</div>') + '</div></div>';
+  if (run.cfg.task === 'regression') renderRegression(run, head);
+  else if (run.cfg.task === 'classification') renderClassification(run, head);
+  else renderClustering(run, head);
+}
+function importanceBlock(run) {
+  if (!run.importance || !run.importance.length) return '';
+  const rows = run.importance.map(i => '<tr><td>' + esc(i.name) + '</td><td class="n">' + fmt(i.imp, 4) + '</td><td class="n">±' + fmt(i.sd, 4) + '</td></tr>').join('');
+  return '<div class="panel"><header><h3>Feature importance</h3><span class="eyebrow">permutation · drop in test score when a column is shuffled</span></header><div class="body"><div class="grid g2">' +
+    '<div class="chartbox"><canvas id="impChart"></canvas></div>' +
+    '<div class="tbl-wrap" style="max-height:300px"><table><thead><tr><th>Feature</th><th>Importance</th><th>SD</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '</div><p style="font-size:12px;color:var(--mut);margin:10px 0 0">Measured on up to 400 held-out rows against this model only. A value near zero means the model is not using the column — not that the column is irrelevant to the outcome.</p></div>';
+}
+function drawImportance(run) {
+  if (!run.importance || !run.importance.length) return;
+  const top = run.importance.slice(0, 14);
+  makeChart('impChart', {
+    type: 'bar',
+    data: { labels: top.map(i => i.name.slice(0, 24)), datasets: [{ label: 'importance', data: top.map(i => i.imp), backgroundColor: top.map(i => i.imp >= 0 ? PAL.blue : PAL.coral) }] },
+    options: baseOpts({ indexAxis: 'y', legend: false, maxTicks: 16 })
+  });
+}
+function renderRegression(run, head) {
+  const t = run.test, tr = run.train;
+  const gap = tr.r2 - t.r2;
+  const cards = '<div class="grid g4">' +
+    metricCard('R² (test)', fmt(t.r2, 4), 'share of variance explained', t.r2 > .7 ? 'good' : t.r2 < .3 ? 'bad' : '') +
+    metricCard('RMSE', fmt(t.rmse, 3), 'same units as ' + esc(run.cfg.target)) +
+    metricCard('MAE', fmt(t.mae, 3), 'typical absolute miss') +
+    metricCard('MAPE', t.mape === null ? '—' : pct(t.mape, 1), 'relative error') +
+    metricCard('R² (train)', fmt(tr.r2, 4), 'gap ' + fmt(gap, 3), gap > .15 ? 'bad' : '') +
+    metricCard('Bias', fmt(t.bias, 3), 'mean signed error') +
+    metricCard('Test rows', String(t.n), 'held out ' + pct(run.cfg.testSize, 0)) +
+    metricCard('CV R²', run.cv ? fmt(run.cv.mean, 3) : '—', run.cv ? '±' + fmt(run.cv.sd, 3) + ' over ' + run.cfg.cv + ' folds' : 'cross-validation off') +
+    '</div>';
+  const charts = '<div class="grid g2">' +
+    '<div class="panel"><header><h3>Predicted vs actual</h3><span class="eyebrow">test rows</span></header><div class="body"><div class="chartbox tall"><canvas id="pvaChart"></canvas></div></div></div>' +
+    '<div class="panel"><header><h3>Residuals vs predicted</h3><span class="eyebrow">look for structure</span></header><div class="body"><div class="chartbox tall"><canvas id="resChart"></canvas></div></div></div>' +
+    '<div class="panel"><header><h3>Residual distribution</h3></header><div class="body"><div class="chartbox"><canvas id="rhChart"></canvas></div></div></div>' +
+    '<div class="panel"><header><h3>Worst misses</h3><span class="eyebrow">largest absolute errors</span></header><div class="body tight"><div class="tbl-wrap" style="max-height:280px" id="missTbl"></div></div></div>' +
+    '</div>';
+  const coefHtml = (run.model.kind === 'linear') ? coefTable(run) : '';
+  const rules = (run.model.kind === 'tree') ? ruleTable(run) : '';
+  $('#anBody').innerHTML = head + cards + charts + importanceBlock(run) + coefHtml + rules;
+
+  const yT = run.mat.yte, yP = run.pred.te;
+  const pts = yT.map((v, i) => ({ x: v, y: yP[i] }));
+  const lo = Math.min.apply(null, yT.concat(yP)), hi = Math.max.apply(null, yT.concat(yP));
+  makeChart('pvaChart', {
+    type: 'scatter',
+    data: {
+      datasets: [
+        { label: 'rows', data: pts, backgroundColor: 'rgba(47,62,168,.5)', pointRadius: 3 },
+        { label: 'perfect prediction', type: 'line', data: [{ x: lo, y: lo }, { x: hi, y: hi }], borderColor: PAL.coral, borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0 }
+      ]
+    },
+    options: baseOpts({ xType: 'linear', xTitle: 'actual ' + run.cfg.target, yTitle: 'predicted' })
+  });
+  const res = yT.map((v, i) => ({ x: yP[i], y: v - yP[i] }));
+  makeChart('resChart', {
+    type: 'scatter',
+    data: {
+      datasets: [
+        { label: 'residual', data: res, backgroundColor: 'rgba(214,58,86,.5)', pointRadius: 3 },
+        { label: 'zero', type: 'line', data: [{ x: Math.min.apply(null, yP), y: 0 }, { x: Math.max.apply(null, yP), y: 0 }], borderColor: PAL.ink, borderWidth: 1, pointRadius: 0 }
+      ]
+    },
+    options: baseOpts({ xType: 'linear', xTitle: 'predicted', yTitle: 'actual − predicted' })
+  });
+  const h = histogram(yT.map((v, i) => v - yP[i]), 20);
+  if (h) makeChart('rhChart', { type: 'bar', data: { labels: h.labels, datasets: [{ data: h.counts, backgroundColor: 'rgba(13,127,127,.7)' }] }, options: baseOpts({ legend: false, xTitle: 'residual', yTitle: 'rows' }) });
+  drawImportance(run);
+
+  const teRows = run.split.te.map((ri, i) => ({ r: run.frame.rows[ri], a: yT[i], p: yP[i], e: Math.abs(yT[i] - yP[i]) })).sort((a, b) => b.e - a.e).slice(0, 12);
+  const cols = run.cfg.features.slice(0, 4);
+  $('#missTbl').innerHTML = '<table><thead><tr><th>Actual</th><th>Predicted</th><th>Error</th>' + cols.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr></thead><tbody>' +
+    teRows.map(o => '<tr><td class="n">' + fmt(o.a, 2) + '</td><td class="n">' + fmt(o.p, 2) + '</td><td class="n"><b>' + fmt(o.a - o.p, 2) + '</b></td>' + cols.map(c => '<td>' + esc(fmtCell(run.ds, c, o.r[c])) + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
+}
+function fmtCell(ds, col, v) {
+  if (v === null || v === undefined) return '—';
+  const f = ds.fields.find(x => x.name === col);
+  if (f && f.type === 'date') return new Date(v).toISOString().slice(0, 10);
+  if (typeof v === 'number') return fmt(v, 2);
+  return String(v);
+}
+function coefTable(run) {
+  const rows = run.model.coef.map((c, j) => ({ n: run.frame.names[j], c: c }))
+    .sort((a, b) => Math.abs(b.c) - Math.abs(a.c)).slice(0, 25);
+  return '<div class="panel"><header><h3>Coefficients</h3><span class="eyebrow">intercept ' + fmt(run.model.intercept, 4) + (run.cfg.pp.scale ? ' · inputs standardised, so these compare directly' : ' · raw units') + '</span></header><div class="body tight"><div class="tbl-wrap" style="max-height:300px"><table><thead><tr><th>Encoded column</th><th>Coefficient</th><th>Direction</th></tr></thead><tbody>' +
+    rows.map(r => '<tr><td>' + esc(r.n) + '</td><td class="n">' + fmt(r.c, 4) + '</td><td>' + (r.c >= 0 ? '<span class="tag teal">raises</span>' : '<span class="tag coral">lowers</span>') + '</td></tr>').join('') +
+    '</tbody></table></div></div></div>';
+}
+function ruleTable(run) {
+  const rules = treeRules(run.model.root, run.frame.names).slice(0, 16);
+  return '<div class="panel"><header><h3>Tree, top levels</h3><span class="eyebrow">depth ' + run.model.depth + ' · ' + run.model.leaves + ' leaves</span></header><div class="body tight"><div class="tbl-wrap" style="max-height:300px"><table><thead><tr><th>Rule path</th><th>Prediction</th><th>Rows</th></tr></thead><tbody>' +
+    rules.map(r => '<tr><td style="white-space:normal">' + esc(r.path) + '</td><td class="n">' + esc(r.v) + '</td><td class="n">' + r.n + '</td></tr>').join('') + '</tbody></table></div></div></div>';
+}
+function cmHtml(run) {
+  const cm = run.test.cm, K = run.K, cls = run.frame.classes;
+  const max = Math.max.apply(null, cm.map(r => Math.max.apply(null, r))) || 1;
+  let h = '<table class="cm"><thead><tr><th></th><th colspan="' + K + '" style="text-align:center" class="eyebrow">predicted</th></tr><tr><th class="eyebrow" style="text-align:right">actual</th>' + cls.map(c => '<th style="font-size:11px">' + esc(String(c)) + '</th>').join('') + '</tr></thead><tbody>';
+  for (let i = 0; i < K; i++) {
+    h += '<tr><th style="text-align:right;font-size:11px">' + esc(String(cls[i])) + '</th>';
+    for (let j = 0; j < K; j++) {
+      const v = cm[i][j], a = v / max;
+      const bg = i === j ? 'rgba(13,127,127,' + (0.1 + a * .8) + ')' : 'rgba(214,58,86,' + (0.08 + a * .8) + ')';
+      h += '<td class="cell" style="background:' + bg + ';color:' + (a > .55 ? '#fff' : 'var(--ink)') + '">' + v + '</td>';
+    }
+    h += '</tr>';
+  }
+  return h + '</tbody></table>';
+}
+function renderClassification(run, head) {
+  const t = run.test, tr = run.train, cls = run.frame.classes;
+  const gap = tr.acc - t.acc;
+  const cards = '<div class="grid g4">' +
+    metricCard('Accuracy (test)', pct(t.acc, 2), 'of ' + t.n + ' held-out rows', t.acc > .85 ? 'good' : t.acc < .6 ? 'bad' : '') +
+    metricCard('Balanced accuracy', t.balAcc === null ? '—' : pct(t.balAcc, 2), 'mean recall across classes') +
+    metricCard('Macro F1', fmt(t.macroF1, 4), 'all classes weighted equally') +
+    metricCard(t.auc !== undefined && t.auc !== null ? 'ROC AUC' : 'Log loss', t.auc !== undefined && t.auc !== null ? fmt(t.auc, 4) : fmt(t.logloss, 4), t.auc !== undefined && t.auc !== null ? 'ranking quality' : 'lower is better') +
+    metricCard('Accuracy (train)', pct(tr.acc, 2), 'gap ' + fmt(gap, 3), gap > .15 ? 'bad' : '') +
+    metricCard('Classes', String(run.K), cls.slice(0, 4).map(c => String(c)).join(', ').slice(0, 30)) +
+    metricCard('Majority baseline', pct(Math.max.apply(null, t.per.map(p => p.support)) / t.n, 1), 'always guess the biggest class') +
+    metricCard('CV accuracy', run.cv ? fmt(run.cv.mean, 3) : '—', run.cv ? '±' + fmt(run.cv.sd, 3) : 'cross-validation off') +
+    '</div>';
+  const perRows = t.per.map(p => '<tr><td>' + esc(String(cls[p.k])) + '</td><td class="n">' + fmt(p.prec, 3) + '</td><td class="n">' + fmt(p.rec, 3) + '</td><td class="n">' + fmt(p.f1, 3) + '</td><td class="n">' + p.support + '</td></tr>').join('');
+  const body = '<div class="grid g2">' +
+    '<div class="panel"><header><h3>Confusion matrix</h3><span class="eyebrow">counts on test rows</span></header><div class="body" id="cmBox"></div></div>' +
+    '<div class="panel"><header><h3>Per-class performance</h3></header><div class="body tight"><div class="tbl-wrap"><table><thead><tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr></thead><tbody>' + perRows + '</tbody></table></div></div></div>' +
+    (run.roc ? '<div class="panel"><header><h3>ROC curve</h3><span class="eyebrow">AUC ' + fmt(t.auc, 4) + '</span></header><div class="body"><div class="chartbox"><canvas id="rocChart"></canvas></div></div></div>' : '') +
+    '<div class="panel"><header><h3>Predicted vs actual class counts</h3></header><div class="body"><div class="chartbox"><canvas id="clsChart"></canvas></div></div></div>' +
+    '</div>';
+  $('#anBody').innerHTML = head + cards + body + importanceBlock(run) + (run.model.kind === 'tree' ? ruleTable(run) : '');
+  $('#cmBox').innerHTML = cmHtml(run) + '<p style="font-size:12px;color:var(--mut);margin:10px 0 0">Rows are the truth, columns are the guess. Off-diagonal cells are where the model is confusing one class for another.</p>';
+  if (run.roc) makeChart('rocChart', {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'model', data: run.roc, borderColor: PAL.blue, borderWidth: 2, pointRadius: 0, fill: false },
+        { label: 'random', data: [{ x: 0, y: 0 }, { x: 1, y: 1 }], borderColor: PAL.mut, borderDash: [4, 4], borderWidth: 1, pointRadius: 0 }
+      ]
+    },
+    options: baseOpts({ xType: 'linear', xTitle: 'false positive rate', yTitle: 'true positive rate', yMin: 0, yMax: 1 })
+  });
+  const actual = new Array(run.K).fill(0), predc = new Array(run.K).fill(0);
+  run.mat.yte.forEach(v => actual[v]++); run.pred.te.forEach(v => predc[v]++);
+  makeChart('clsChart', {
+    type: 'bar',
+    data: { labels: cls.map(c => String(c).slice(0, 14)), datasets: [{ label: 'actual', data: actual, backgroundColor: 'rgba(13,127,127,.6)' }, { label: 'predicted', data: predc, backgroundColor: PAL.blue }] },
+    options: baseOpts({ yZero: true, yTitle: 'rows' })
+  });
+  drawImportance(run);
+}
+function renderClustering(run, head) {
+  const t = run.test;
+  const cards = '<div class="grid g4">' +
+    metricCard('Silhouette', t.silhouette === null ? '—' : fmt(t.silhouette, 4), '−1 to 1 · above 0.5 is well separated', t.silhouette > .5 ? 'good' : t.silhouette < .25 ? 'bad' : '') +
+    metricCard('Inertia', fmt(t.inertia, 1), 'within-cluster sum of squares') +
+    metricCard('Clusters', String(run.cfg.hp.k), 'sizes: ' + t.sizes.join(' / ')) +
+    metricCard('Rows', String(t.n), run.frame.names.length + ' encoded columns') +
+    '</div>';
+  const body = '<div class="grid g2">' +
+    '<div class="panel"><header><h3>Clusters in 2-D</h3><span class="eyebrow">PCA · ' + pct(run.pca.ev[0] + run.pca.ev[1], 0) + ' of variance shown</span></header><div class="body"><div class="chartbox tall"><canvas id="pcaChart"></canvas></div></div></div>' +
+    '<div class="panel"><header><h3>Choosing k</h3><span class="eyebrow">elbow: inertia against k</span></header><div class="body"><div class="chartbox tall"><canvas id="elbowChart"></canvas></div></div></div>' +
+    '</div><div class="panel"><header><h3>Cluster profiles</h3><span class="eyebrow">mean of each numeric feature, original units</span></header><div class="body tight"><div class="tbl-wrap" id="cprof"></div></div></div>';
+  $('#anBody').innerHTML = head + cards + body;
+  const groups = [];
+  for (let k = 0; k < +run.cfg.hp.k; k++) groups.push({ label: 'cluster ' + k, data: [], backgroundColor: SERIES[k % SERIES.length], pointRadius: 3 });
+  run.pca.proj.forEach((p, i) => groups[run.labels[i]].data.push({ x: p[0], y: p[1] }));
+  makeChart('pcaChart', { type: 'scatter', data: { datasets: groups }, options: baseOpts({ xType: 'linear', xTitle: 'PC1 (' + pct(run.pca.ev[0], 0) + ')', yTitle: 'PC2 (' + pct(run.pca.ev[1], 0) + ')' }) });
+  makeChart('elbowChart', {
+    type: 'line',
+    data: { labels: t.elbow.map(e => e.k), datasets: [{ label: 'inertia', data: t.elbow.map(e => e.inertia), borderColor: PAL.coral, backgroundColor: 'rgba(214,58,86,.1)', borderWidth: 2, pointRadius: 3, fill: true }] },
+    options: baseOpts({ legend: false, xTitle: 'k', yTitle: 'inertia' })
+  });
+  const numFeats = run.cfg.features.filter(f => { const fl = run.ds.fields.find(x => x.name === f); return fl && fl.type === 'number'; }).slice(0, 8);
+  let html = '<table><thead><tr><th>Cluster</th><th>Rows</th>' + numFeats.map(f => '<th>' + esc(f) + '</th>').join('') + '</tr></thead><tbody>';
+  for (let k = 0; k < +run.cfg.hp.k; k++) {
+    const rows = run.frame.rows.filter((_, i) => run.labels[i] === k);
+    html += '<tr><td><span class="tag" style="background:' + SERIES[k % SERIES.length] + ';color:#fff">cluster ' + k + '</span></td><td class="n">' + rows.length + '</td>' +
+      numFeats.map(f => '<td class="n">' + fmt(S.mean(rows.map(r => r[f])), 2) + '</td>').join('') + '</tr>';
+  }
+  $('#cprof').innerHTML = html + '</tbody></table>';
+}
+/* ============================================================
+   Part 5: projections, report, PDF export, wiring.
+   ============================================================ */
+function predictRows(run, rowObjs) {
+  const V = rowObjs.map(r => run.mat.transform(encodeRow(r, run.frame.enc)));
+  const out = run.model.predict(V);
+  const prob = run.model.predictProba ? run.model.predictProba(V) : null;
+  return { y: out, prob: prob };
+}
+function labelOut(run, v) {
+  if (run.cfg.task === 'classification') return String(run.frame.classes[v]);
+  if (run.cfg.task === 'clustering') return 'cluster ' + v;
+  return fmt(v, 3);
+}
+function defaultRow(run) {
+  const r = {};
+  run.cfg.features.forEach(f => {
+    const fl = run.ds.fields.find(x => x.name === f);
+    if (!fl) return;
+    r[f] = (fl.type === 'number' || fl.type === 'date') ? (fl.stats.median !== undefined ? fl.stats.median : 0) : fl.stats.top;
+  });
+  return r;
+}
+function renderProjection() {
+  const sel = $('#prPick');
+  sel.innerHTML = State.runs.map(r => '<option value="' + r.id + '">' + esc(r.cfg.name) + ' · ' + esc(r.ds.name) + '</option>').join('');
+  const run = State.runs.find(r => r.id === State.activeRun) || State.runs[0];
+  if (!run) { $('#prBody').innerHTML = '<div class="panel"><div class="empty"><div class="eyebrow">Nothing selected</div>Run a scenario first.</div></div>'; return; }
+  sel.value = run.id;
+  const numFeats = run.cfg.features.filter(f => { const fl = run.ds.fields.find(x => x.name === f); return fl && (fl.type === 'number' || fl.type === 'date'); });
+  const inputs = run.cfg.features.map(f => {
+    const fl = run.ds.fields.find(x => x.name === f);
+    if (!fl) return '';
+    if (fl.type === 'number' || fl.type === 'date') {
+      return '<label class="field"><span class="eyebrow">' + esc(f) + ' <span style="text-transform:none;letter-spacing:0">· ' + fmt(fl.stats.min, 2) + ' to ' + fmt(fl.stats.max, 2) + '</span></span><input type="number" data-wi="' + esc(f) + '" value="' + (fl.stats.median || 0) + '" step="any"></label>';
+    }
+    const levels = (fl.stats.levels || []).slice(0, 60);
+    return '<label class="field"><span class="eyebrow">' + esc(f) + '</span><select data-wi="' + esc(f) + '">' + levels.map(l => '<option ' + (l === fl.stats.top ? 'selected' : '') + '>' + esc(String(l)) + '</option>').join('') + '</select></label>';
+  }).join('');
+
+  const others = State.datasets.filter(d => d.id !== run.ds.id);
+  $('#prBody').innerHTML =
+    '<div class="grid g2">' +
+    '<div class="panel"><header><h3>What-if · single case</h3><span class="eyebrow">' + esc(run.cfg.name) + '</span></header><div class="body">' +
+    '<div class="scroller" style="max-height:320px">' + inputs + '</div>' +
+    '<div class="row" style="margin-top:12px"><button class="btn" id="wiGo">Predict</button><button class="btn quiet sm" id="wiReset">Reset to typical row</button></div>' +
+    '<div id="wiOut" style="margin-top:12px"></div></div></div>' +
+    '<div class="panel"><header><h3>One-variable sweep</h3><span class="eyebrow">partial dependence</span></header><div class="body">' +
+    (numFeats.length ? '<label class="field"><span class="eyebrow">Variable</span><select id="pdCol">' + numFeats.map(f => '<option>' + esc(f) + '</option>').join('') + '</select></label>' +
+      '<div class="chartbox"><canvas id="pdChart"></canvas></div>' +
+      '<p style="font-size:12px;color:var(--mut);margin:10px 0 0">Average prediction as this one variable moves across its observed range, with every other column left as it is in the data. Outside the shaded range the model is extrapolating and should not be trusted.</p>'
+      : '<div class="empty">No numeric feature to sweep.</div>') +
+    '</div></div></div>' +
+    '<div class="panel"><header><h3>Score a whole table</h3><span class="eyebrow">applies this fitted model to another loaded table</span></header><div class="body">' +
+    (others.length ? '<div class="row"><select id="scoreDS" style="width:auto;min-width:220px">' + others.map(d => '<option value="' + d.id + '">' + esc(d.name) + ' · ' + d.rows.length + ' rows</option>').join('') + '</select>' +
+      '<button class="btn" id="scoreGo">Score table</button><button class="btn ghost sm" id="scoreDl" disabled>Download scored CSV</button></div><div id="scoreOut" style="margin-top:12px"></div>'
+      : '<div class="empty">Load a second table on step 01 to score it here. Columns are matched by name; anything missing is imputed with the training median.</div>') +
+    '</div></div>';
+
+  const whatIf = () => {
+    const r = {};
+    $$('#prBody [data-wi]').forEach(el => {
+      const f = el.dataset.wi, fl = run.ds.fields.find(x => x.name === f);
+      r[f] = (fl.type === 'number' || fl.type === 'date') ? (el.value === '' ? null : Number(el.value)) : el.value;
+    });
+    const out = predictRows(run, [r]);
+    let html = '<div class="metric"><div class="k">Prediction</div><div class="v">' + esc(labelOut(run, out.y[0])) + '</div><div class="s">' + esc(run.cfg.target || 'cluster') + '</div></div>';
+    if (out.prob) {
+      html += '<div style="margin-top:10px"><div class="eyebrow" style="margin-bottom:5px">Class probabilities</div>' +
+        out.prob[0].map((p, k) => '<div class="row" style="gap:8px;margin-bottom:3px"><span style="width:90px;font-size:12px;overflow:hidden;text-overflow:ellipsis">' + esc(String(run.frame.classes[k])) + '</span><span style="flex:1;height:8px;background:#eceff3;border-radius:2px;overflow:hidden"><span style="display:block;height:8px;width:' + (p * 100) + '%;background:' + SERIES[k % SERIES.length] + '"></span></span><span class="num" style="font-size:11px;width:44px;text-align:right">' + pct(p, 1) + '</span></div>').join('') + '</div>';
+    }
+    html += '<p style="font-size:12px;color:var(--mut);margin:10px 0 0">A point estimate with no interval. Typical error on held-out rows was ' + (run.cfg.task === 'regression' ? '±' + fmt(run.test.mae, 2) + ' (MAE)' : pct(1 - run.test.acc, 1) + ' of cases misclassified') + '.</p>';
+    $('#wiOut').innerHTML = html;
+  };
+  if ($('#wiGo')) {
+    $('#wiGo').addEventListener('click', whatIf);
+    $('#wiReset').addEventListener('click', () => { renderProjection(); });
+    whatIf();
+  }
+  if (numFeats.length) { $('#pdCol').addEventListener('change', () => drawPD(run, $('#pdCol').value)); drawPD(run, numFeats[0]); }
+  if (others.length) {
+    let scored = null;
+    $('#scoreGo').addEventListener('click', () => {
+      const ds2 = getDS($('#scoreDS').value);
+      const missing = run.cfg.features.filter(f => !ds2.fields.some(x => x.name === f));
+      const out = predictRows(run, ds2.rows);
+      scored = ds2.rows.map((r, i) => Object.assign({}, r, { prediction: labelOut(run, out.y[i]) }));
+      const cols = Object.keys(scored[0]).slice(0, 8);
+      $('#scoreOut').innerHTML = (missing.length ? '<div class="note warn"><b>' + missing.length + ' feature column(s) not found</b> in this table (' + esc(missing.join(', ')) + '). They were filled with the training median, which weakens every prediction below.</div>' : '') +
+        '<div class="tbl-wrap" style="max-height:300px"><table><thead><tr>' + cols.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr></thead><tbody>' +
+        scored.slice(0, 60).map(r => '<tr>' + cols.map(c => '<td>' + esc(fmtCell(ds2, c, r[c])) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>' +
+        '<p style="font-size:12px;color:var(--mut);margin:8px 0 0">' + scored.length + ' rows scored · showing first 60.</p>';
+      $('#scoreDl').disabled = false;
+    });
+    $('#scoreDl').addEventListener('click', () => { if (scored) downloadCSV(scored, 'scored_rows.csv'); });
+  }
+}
+function drawPD(run, col) {
+  const fl = run.ds.fields.find(x => x.name === col);
+  const rnd = mulberry32(run.cfg.seed + 3);
+  const sample = shuffled(run.frame.rows, rnd).slice(0, Math.min(150, run.frame.rows.length));
+  const lo = fl.stats.min, hi = fl.stats.max, steps = 24;
+  const xs = [], ys = [];
+  for (let s = 0; s < steps; s++) {
+    const g = lo + (hi - lo) * s / (steps - 1);
+    const rows = sample.map(r => Object.assign({}, r, { [col]: g }));
+    const out = predictRows(run, rows);
+    let v;
+    if (run.cfg.task === 'regression') v = S.mean(out.y);
+    else if (out.prob) v = S.mean(out.prob.map(p => p[p.length - 1]));
+    else v = S.mean(out.y);
+    xs.push(fmt(g, 2)); ys.push(v);
+  }
+  const ylab = run.cfg.task === 'regression' ? 'mean predicted ' + run.cfg.target
+    : run.cfg.task === 'classification' ? 'mean P(' + String(run.frame.classes[run.frame.classes.length - 1]) + ')' : 'mean cluster';
+  makeChart('pdChart', {
+    type: 'line',
+    data: { labels: xs, datasets: [{ label: ylab, data: ys, borderColor: PAL.blue, backgroundColor: 'rgba(47,62,168,.10)', borderWidth: 2, pointRadius: 0, fill: true, tension: .15 }] },
+    options: baseOpts({ legend: false, xTitle: col, yTitle: ylab })
+  });
+}
+function downloadCSV(rows, name) {
+  const cols = Object.keys(rows[0]);
+  const q = v => { const s = v === null || v === undefined ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const csv = [cols.join(',')].concat(rows.map(r => cols.map(c => q(r[c])).join(','))).join('\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  const a = document.createElement('a'); a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+/* ============================================================
+   Report
+   ============================================================ */
+function renderReportList() {
+  const box = $('#rpList');
+  if (!State.runs.length) { box.innerHTML = '<div class="empty">No runs yet.</div>'; return; }
+  box.innerHTML = State.runs.map(r => {
+    const p = primaryOf(r);
+    return '<label class="checkbox"><input type="checkbox" value="' + r.id + '" checked><span>' + esc(r.cfg.name) + ' <span class="tag grey">' + esc(r.ds.name) + '</span> <span class="num" style="font-size:11px;color:var(--mut)">' + p.label + ' ' + fmt(p.value, 3) + '</span></span></label>';
+  }).join('');
+}
+function bestRuns() {
+  const by = {};
+  State.runs.forEach(r => {
+    const k = r.cfg.task + '|' + r.ds.id + '|' + (r.cfg.target || '');
+    if (!by[k] || (primaryOf(r).value || -9) > (primaryOf(by[k]).value || -9)) by[k] = r;
+  });
+  return Object.keys(by).map(k => by[k]);
+}
+function renderFindings() {
+  const box = $('#findings');
+  if (!State.runs.length) { box.innerHTML = '<div class="empty">Run at least one scenario.</div>'; return; }
+  const winners = bestRuns();
+  let html = winners.map(w => {
+    const p = primaryOf(w);
+    if (w.cfg.task === 'clustering') {
+      const sizes = w.test.sizes.join(' / ');
+      const q = w.test.silhouette > .5 ? 'well separated' : w.test.silhouette > .25 ? 'weakly separated — the groups overlap' : 'barely separated, which usually means there are no natural clusters in these columns';
+      return '<div class="note"><b>' + esc(w.ds.name) + ' (unsupervised):</b> k-means with k=' + w.cfg.hp.k + ' gives silhouette ' + fmt(w.test.silhouette, 3) + ' and cluster sizes ' + sizes + ' — ' + q + '. There is no accuracy here; the split is a description, not a prediction.</div>';
+    }
+    const peers = State.runs.filter(r => r.cfg.task === w.cfg.task && r.ds.id === w.ds.id && r.cfg.target === w.cfg.target);
+    const second = peers.filter(r => r.id !== w.id).sort((a, b) => (primaryOf(b).value || -9) - (primaryOf(a).value || -9))[0];
+    const margin = second ? p.value - primaryOf(second).value : null;
+    const top3 = (w.importance || []).slice(0, 3).map(i => i.name).join(', ');
+    return '<div class="note"><b>' + esc(w.ds.name) + (w.cfg.target ? ' → ' + esc(w.cfg.target) : '') + ':</b> ' +
+      esc(ALGOS[w.cfg.algo].label) + ' leads with ' + p.label + ' ' + fmt(p.value, 4) +
+      (second ? ', ' + (margin < 0.02 ? 'but only ' : '') + fmt(margin, 4) + ' ahead of ' + esc(ALGOS[second.cfg.algo].label) + (margin < 0.02 ? ' — that margin is inside the noise you would get from changing the random seed, so treat them as tied.' : '.') : ' (only run on this target).') +
+      (top3 ? ' Main drivers: ' + esc(top3) + '.' : '') + '</div>';
+  }).join('');
+  const allAudits = [];
+  State.runs.forEach(r => auditRun(r).forEach(a => { if (a.lvl === 'bad') allAudits.push({ r: r, a: a }); }));
+  if (allAudits.length) {
+    html += '<div class="eyebrow" style="margin:14px 0 6px">Blocking issues</div>' +
+      allAudits.slice(0, 8).map(o => '<div class="note bad"><b>' + esc(o.r.cfg.name) + ' — ' + o.a.t + ':</b> ' + o.a.m + '</div>').join('');
+  }
+  box.innerHTML = html;
+}
+
+/* ---------- PDF ---------- */
+const PDF = { M: 44, W: 595, H: 842 };
+function buildPDF() {
+  if (!hasPDF()) { $('#pdfMsg').innerHTML = '<div class="note bad"><b>PDF library did not load.</b> The CDN may be blocked on this network. Use your browser\'s Print → Save as PDF as a fallback.</div>'; return; }
+  const ids = $$('#rpList input:checked').map(i => i.value);
+  const runs = State.runs.filter(r => ids.indexOf(r.id) >= 0);
+  if (!runs.length) { $('#pdfMsg').innerHTML = '<div class="note warn">Select at least one scenario to include.</div>'; return; }
+  $('#pdfMsg').innerHTML = '<div class="note"><span class="spinner"></span> Rendering ' + runs.length + ' scenario(s)…</div>';
+  setTimeout(() => {
+    try { generatePDF(runs); $('#pdfMsg').innerHTML = '<div class="note ok"><b>Report saved.</b> Check your downloads folder.</div>'; }
+    catch (e) { $('#pdfMsg').innerHTML = '<div class="note bad"><b>Could not build the PDF.</b> ' + esc(e.message) + '</div>'; }
+  }, 60);
+}
+const CP = { '\u2212': '-', '\u2264': '<=', '\u2265': '>=', '\u2192': '->', '\u25aa': '\u2022', '\u00d7': 'x' };
+function PT(v) {
+  return String(v === null || v === undefined ? '' : v)
+    .replace(/[\u2212\u2264\u2265\u2192\u25aa\u00d7]/g, m => CP[m])
+    .replace(/[^\x00-\xff\u20ac\u201a\u0192\u201e\u2026\u2020\u2021\u02c6\u2030\u0160\u2039\u0152\u017d\u2018\u2019\u201c\u201d\u2022\u2013\u2014\u02dc\u2122\u0161\u203a\u0153\u017e\u0178]/g, '?');
+}
+function generatePDF(runs) {
+  const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'a4' });
+  const M = PDF.M, W = PDF.W - M * 2;
+  let y = M;
+  const ink = [15, 23, 32], blue = [47, 62, 168], mut = [107, 125, 143], coral = [214, 58, 86];
+
+  function need(h) { if (y + h > PDF.H - M - 14) { doc.addPage(); y = M; } }
+  function rule(c) { doc.setDrawColor.apply(doc, c || [211, 219, 228]); doc.setLineWidth(.7); doc.line(M, y, M + W, y); y += 10; }
+  function h1(t) { if (y > PDF.M + 2) y += 12; need(40); doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor.apply(doc, ink); doc.text(PT(t), M, y); y += 8; rule(blue); }
+  function h2(t) { need(26); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor.apply(doc, ink); doc.text(PT(t), M, y + 8); y += 20; }
+  function eyebrow(t) { need(16); doc.setFont('courier', 'normal'); doc.setFontSize(7.5); doc.setTextColor.apply(doc, mut); doc.text(PT(t).toUpperCase(), M, y); y += 12; }
+  function para(t, size) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(size || 9.5); doc.setTextColor(45, 60, 75);
+    const lines = doc.splitTextToSize(PT(t), W);
+    lines.forEach(l => { need(13); doc.text(l, M, y); y += 12.5; });
+    y += 4;
+  }
+  function table(cols, rows, widths, opts) {
+    opts = opts || {};
+    const cw = widths || cols.map(() => W / cols.length);
+    need(26);
+    doc.setFillColor(240, 243, 246); doc.rect(M, y - 9, W, 16, 'F');
+    doc.setFont('courier', 'bold'); doc.setFontSize(7.2); doc.setTextColor.apply(doc, mut);
+    let x = M; cols.forEach((c, i) => { doc.text(PT(c).toUpperCase().slice(0, 26), x + 3, y + 2); x += cw[i]; });
+    y += 14;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.4);
+    rows.forEach((r, ri) => {
+      const cells = r.map((c, i) => doc.splitTextToSize(PT(c), cw[i] - 6).slice(0, 3));
+      const lines = Math.max.apply(null, cells.map(c => c.length));
+      const rowH = lines * 10.5 + 4;
+      need(rowH + 2);
+      if (ri % 2) { doc.setFillColor(250, 251, 252); doc.rect(M, y - 8, W, rowH, 'F'); }
+      x = M;
+      cells.forEach((c, i) => {
+        doc.setTextColor.apply(doc, opts.hi && opts.hi(ri, i) ? blue : ink);
+        c.forEach((ln, li) => doc.text(ln, x + 3, y + 2 + li * 10.5));
+        x += cw[i];
+      });
+      y += rowH;
+    });
+    y += 10;
+  }
+  function img(url, h) {
+    if (!url) return;
+    need(h + 12);
+    doc.addImage(url, 'PNG', M, y, W, h); y += h + 12;
+  }
+
+  /* ---- cover ---- */
+  doc.setFillColor(15, 23, 32); doc.rect(0, 0, PDF.W, 150, 'F');
+  doc.setFont('courier', 'normal'); doc.setFontSize(8); doc.setTextColor(150, 165, 185);
+  doc.text('ML BENCH · MODEL EVALUATION', M, 46);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(21); doc.setTextColor(255, 255, 255);
+  doc.text(doc.splitTextToSize(PT($('#rpTitle').value || 'Model evaluation report'), W), M, 76);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(170, 185, 205);
+  const author = $('#rpAuthor').value.trim();
+  doc.text(new Date().toLocaleString() + (author ? '  ·  ' + author : ''), M, 124);
+  y = 186;
+  const notes = $('#rpNotes').value.trim();
+  if (notes) { eyebrow('Objective'); para(notes); }
+
+  eyebrow('Scope');
+  const dsUsed = [];
+  runs.forEach(r => { if (dsUsed.indexOf(r.ds) < 0) dsUsed.push(r.ds); });
+  para(runs.length + ' scenario' + (runs.length === 1 ? '' : 's') + ' across ' + dsUsed.length + ' table' + (dsUsed.length === 1 ? '' : 's') + '. All models were trained and evaluated in the browser on the data supplied; no external service was involved.');
+
+  /* ---- leaderboard ---- */
+  h1('Results at a glance');
+  const sorted = runs.slice().sort((a, b) => (primaryOf(b).value || -9) - (primaryOf(a).value || -9));
+  table(['Scenario', 'Table', 'Task', 'Metric', 'Score', 'Train−test'],
+    sorted.map(r => {
+      const p = primaryOf(r);
+      const trv = r.cfg.task === 'regression' ? r.train.r2 : r.cfg.task === 'classification' ? r.train.acc : null;
+      return [r.cfg.name, r.ds.name, r.cfg.task, p.label, fmt(p.value, 4), trv === null ? '—' : fmt(trv - p.value, 3)];
+    }),
+    [150, 80, 78, 60, 60, 79], { hi: (ri) => ri === 0 });
+  if (hasChart() && sorted.length > 1) {
+    img(chartImage({
+      type: 'bar',
+      data: { labels: sorted.map(r => r.cfg.name.slice(0, 30)), datasets: [{ label: 'primary metric (test)', data: sorted.map(r => primaryOf(r).value), backgroundColor: '#2f3ea8' }] },
+      options: baseOpts({ indexAxis: 'y', legend: false, maxTicks: 20 })
+    }, 1000, 300 + sorted.length * 14), 150 + sorted.length * 6);
+  }
+
+  /* ---- data profile ---- */
+  if ($('#rpData').checked) {
+    dsUsed.forEach(ds => {
+      h1('Data profile · ' + ds.name);
+      para(ds.rows.length.toLocaleString() + ' rows × ' + ds.fields.length + ' columns. Types below were inferred from the values, not declared.');
+      table(['Column', 'Type', 'Range / top', 'Mean', 'Unique', 'Missing'],
+        ds.fields.slice(0, 30).map(f => {
+          const s = f.stats;
+          const rng = f.type === 'number' ? fmt(s.min, 2) + ' – ' + fmt(s.max, 2)
+            : f.type === 'date' ? new Date(s.min).toISOString().slice(0, 10) + ' – ' + new Date(s.max).toISOString().slice(0, 10)
+              : String(s.top === null ? '—' : s.top).slice(0, 18);
+          return [f.name, f.type, rng, f.type === 'number' ? fmt(s.mean, 2) : '—', String(s.unique), pct(s.missingPct, 0)];
+        }), [130, 55, 130, 70, 55, 67]);
+    });
+  }
+
+  /* ---- per scenario ---- */
+  runs.forEach(run => {
+    doc.addPage(); y = M;
+    h1(run.cfg.name);
+    eyebrow('Configuration');
+    const hpTxt = Object.keys(run.cfg.hp).map(k => k + '=' + run.cfg.hp[k]).join(', ') || 'defaults';
+    table(['Setting', 'Value'], [
+      ['Table', run.ds.name + ' (' + run.frame.X.length + ' usable rows)'],
+      ['Task', run.cfg.task],
+      ['Target', run.cfg.target || '— (unsupervised)'],
+      ['Algorithm', ALGOS[run.cfg.algo].label],
+      ['Hyperparameters', hpTxt],
+      ['Features', run.cfg.features.join(', ')],
+      ['Encoded columns', String(run.frame.names.length)],
+      ['Split', run.cfg.splitMode + ', ' + pct(run.cfg.testSize, 0) + ' held out, seed ' + run.cfg.seed],
+      ['Preprocessing', [run.cfg.pp.scale ? 'standardised' : 'raw scale', run.cfg.pp.impute ? 'median imputation' : 'no imputation', run.cfg.pp.onehot ? 'one-hot ≤12 levels' : 'ordinal encoding'].join(', ')],
+      ['Cross-validation', run.cv ? run.cfg.cv + '-fold: ' + fmt(run.cv.mean, 4) + ' ± ' + fmt(run.cv.sd, 4) : 'off'],
+      ['Runtime', run.ms + ' ms']
+    ], [120, 387]);
+
+    eyebrow('Held-out performance');
+    if (run.cfg.task === 'regression') {
+      table(['Metric', 'Test', 'Train', 'Reading'], [
+        ['R²', fmt(run.test.r2, 4), fmt(run.train.r2, 4), 'variance explained; 0 = no better than the mean'],
+        ['RMSE', fmt(run.test.rmse, 3), fmt(run.train.rmse, 3), 'penalises large misses, units of the target'],
+        ['MAE', fmt(run.test.mae, 3), fmt(run.train.mae, 3), 'typical absolute error'],
+        ['MAPE', run.test.mape === null ? '—' : pct(run.test.mape, 1), run.train.mape === null ? '—' : pct(run.train.mape, 1), 'relative error; unstable near zero'],
+        ['Bias', fmt(run.test.bias, 3), fmt(run.train.bias, 3), 'systematic over/under-prediction']
+      ], [70, 70, 70, 297]);
+    } else if (run.cfg.task === 'classification') {
+      table(['Metric', 'Test', 'Train', 'Reading'], [
+        ['Accuracy', pct(run.test.acc, 2), pct(run.train.acc, 2), 'share of correct predictions'],
+        ['Balanced accuracy', run.test.balAcc === null ? '—' : pct(run.test.balAcc, 2), '—', 'mean recall; ignores class sizes'],
+        ['Macro F1', fmt(run.test.macroF1, 4), fmt(run.train.macroF1, 4), 'precision/recall balance per class'],
+        ['ROC AUC', run.test.auc === undefined || run.test.auc === null ? 'n/a' : fmt(run.test.auc, 4), '—', 'binary ranking quality'],
+        ['Log loss', run.test.logloss === undefined ? 'n/a' : fmt(run.test.logloss, 4), '—', 'penalises confident mistakes']
+      ], [90, 70, 70, 277]);
+      table(['Class', 'Precision', 'Recall', 'F1', 'Support'],
+        run.test.per.map(p => [String(run.frame.classes[p.k]), fmt(p.prec, 3), fmt(p.rec, 3), fmt(p.f1, 3), String(p.support)]),
+        [167, 85, 85, 85, 85]);
+    } else {
+      table(['Metric', 'Value'], [
+        ['Silhouette', run.test.silhouette === null ? '—' : fmt(run.test.silhouette, 4)],
+        ['Inertia', fmt(run.test.inertia, 2)],
+        ['Clusters', String(run.cfg.hp.k)],
+        ['Cluster sizes', run.test.sizes.join(' / ')]
+      ], [150, 357]);
+    }
+
+    if ($('#rpCharts').checked && hasChart()) {
+      eyebrow('Diagnostics');
+      pdfCharts(run).forEach(c => { h2(c.title); img(chartImage(c.cfg, 1000, 480), 205); });
+    }
+    if ($('#rpImp').checked && run.importance && run.importance.length) {
+      eyebrow('Feature importance');
+      para('Permutation importance: how much the test score falls when one column is randomly shuffled. It reflects what this model relies on, not what causes the outcome.');
+      table(['Feature', 'Importance', 'SD'], run.importance.slice(0, 15).map(i => [i.name, fmt(i.imp, 4), '±' + fmt(i.sd, 4)]), [267, 120, 120]);
+    }
+    const audit = auditRun(run);
+    if (audit.length) {
+      eyebrow('Warnings');
+      audit.forEach(a => { doc.setTextColor.apply(doc, a.lvl === 'bad' ? coral : [169, 122, 0]); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); need(14); doc.text('• ' + PT(a.t), M, y); y += 12; doc.setFont('helvetica', 'normal'); para(a.m, 9); });
+    }
+  });
+
+  /* ---- findings ---- */
+  if ($('#rpFind').checked) {
+    doc.addPage(); y = M;
+    h1('Findings');
+    bestRuns().filter(w => runs.indexOf(w) >= 0).forEach(w => {
+      const p = primaryOf(w);
+      const peers = runs.filter(r => r.cfg.task === w.cfg.task && r.ds.id === w.ds.id && r.cfg.target === w.cfg.target && r.id !== w.id);
+      const second = peers.sort((a, b) => (primaryOf(b).value || -9) - (primaryOf(a).value || -9))[0];
+      h2((w.cfg.target ? w.ds.name + ' → ' + w.cfg.target : w.ds.name + ' (unsupervised)'));
+      if (w.cfg.task === 'clustering') {
+        para('k-means with k=' + w.cfg.hp.k + ' gives silhouette ' + fmt(w.test.silhouette, 3) + ' with cluster sizes ' + w.test.sizes.join(' / ') + '. Silhouette above 0.5 indicates well separated groups; below 0.25 the clusters overlap so heavily that the partition is mostly an artefact of the chosen k. There is no accuracy for an unsupervised run — the output describes the rows, it does not predict anything.');
+        return;
+      }
+      let t = ALGOS[w.cfg.algo].label + ' is the strongest of the ' + (peers.length + 1) + ' scenario(s) tested, at ' + p.label + ' ' + fmt(p.value, 4) + ' on ' + (w.test.n || w.frame.X.length) + ' held-out rows.';
+      if (second) {
+        const d = p.value - primaryOf(second).value;
+        t += ' Next is ' + ALGOS[second.cfg.algo].label + ' at ' + fmt(primaryOf(second).value, 4) + ' — a margin of ' + fmt(d, 4) + (d < 0.02 ? ', which is small enough that a different random seed could reverse the order. Do not present these as clearly separated.' : '.');
+      }
+      if (w.importance && w.importance.length) t += ' The model leans mostly on ' + w.importance.slice(0, 3).map(i => i.name).join(', ') + '.';
+      if (w.cv) t += ' Cross-validated ' + p.label + ' is ' + fmt(w.cv.mean, 4) + ' ± ' + fmt(w.cv.sd, 4) + ' over ' + w.cfg.cv + ' folds, which is the number to quote.';
+      para(t);
+    });
+  }
+
+  /* ---- method ---- */
+  if ($('#rpMethod').checked) {
+    doc.addPage(); y = M;
+    h1('Method and limitations');
+    h2('How the numbers were produced');
+    para('Permutation importance was measured on up to 400 held-out rows. Column types were inferred from the values. Text columns with 12 or fewer levels were one-hot encoded, wider ones were replaced by a frequency rank. Missing values were filled with the training median (numeric) or treated as their own level (text). Standardisation, imputation and encoding statistics were computed on the training rows only and then applied unchanged to the held-out rows, so the test estimate is not inflated by information from the test set.');
+    para('Every algorithm is implemented directly in JavaScript inside the page: ordinary least squares and ridge by normal equations, logistic regression by batch gradient descent (one-vs-rest), CART trees by exhaustive sweep over sorted feature values, random forests by bootstrap aggregation with feature subsampling, gradient boosting by sequential trees on residuals, Gaussian naive Bayes, brute-force k-nearest neighbours, and k-means with k-means++ seeding.');
+    h2('What this cannot tell you');
+    para('These are correlations found in one sample, not causes. Feature importance says what the model used, not what drives the outcome; changing an input in the real world will not necessarily move the result the way the sweep chart suggests.');
+    para('A single hold-out split is a noisy estimate. With a few hundred rows, differences under roughly 0.02 in R² or accuracy are usually seed noise rather than a real difference between models. Cross-validation reduces that noise and is the more honest figure to report.');
+    para('If the rows are ordered in time, a random split lets the model learn from the future, and the score will be optimistic. Use the chronological split for anything that will be used to predict forward.');
+    para('No hyperparameter search was performed beyond the values recorded for each scenario, so the comparison is between these specific configurations, not between the algorithms at their best. Prediction intervals, calibration curves, fairness analysis across subgroups, and statistical significance tests are not covered by this report.');
+  }
+
+  const n = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i);
+    doc.setFont('courier', 'normal'); doc.setFontSize(7.5); doc.setTextColor(140, 155, 172);
+    doc.text('ML Bench', M, PDF.H - 24);
+    doc.text(i + ' / ' + n, PDF.W - M - 22, PDF.H - 24);
+  }
+  const fname = ($('#rpTitle').value || 'model_report').replace(/[^a-z0-9]+/gi, '_').toLowerCase() + '.pdf';
+  doc.save(fname);
+}
+function pdfCharts(run) {
+  const out = [];
+  if (run.cfg.task === 'regression') {
+    const yT = run.mat.yte, yP = run.pred.te;
+    const lo = Math.min.apply(null, yT.concat(yP)), hi = Math.max.apply(null, yT.concat(yP));
+    out.push({
+      title: 'Predicted vs actual (test rows)', cfg: {
+        type: 'scatter',
+        data: {
+          datasets: [
+            { label: 'rows', data: yT.map((v, i) => ({ x: v, y: yP[i] })), backgroundColor: 'rgba(47,62,168,.55)', pointRadius: 3 },
+            { label: 'perfect', type: 'line', data: [{ x: lo, y: lo }, { x: hi, y: hi }], borderColor: '#d63a56', borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0 }
+          ]
+        },
+        options: baseOpts({ xType: 'linear', xTitle: 'actual', yTitle: 'predicted' })
+      }
+    });
+    out.push({
+      title: 'Residuals vs predicted', cfg: {
+        type: 'scatter',
+        data: { datasets: [{ label: 'residual', data: yP.map((v, i) => ({ x: v, y: yT[i] - v })), backgroundColor: 'rgba(214,58,86,.55)', pointRadius: 3 }] },
+        options: baseOpts({ xType: 'linear', legend: false, xTitle: 'predicted', yTitle: 'actual − predicted' })
+      }
+    });
+  } else if (run.cfg.task === 'classification') {
+    const actual = new Array(run.K).fill(0), predc = new Array(run.K).fill(0);
+    run.mat.yte.forEach(v => actual[v]++); run.pred.te.forEach(v => predc[v]++);
+    out.push({
+      title: 'Actual vs predicted class counts', cfg: {
+        type: 'bar',
+        data: { labels: run.frame.classes.map(c => String(c).slice(0, 14)), datasets: [{ label: 'actual', data: actual, backgroundColor: 'rgba(13,127,127,.7)' }, { label: 'predicted', data: predc, backgroundColor: '#2f3ea8' }] },
+        options: baseOpts({ yZero: true, yTitle: 'rows' })
+      }
+    });
+    if (run.roc) out.push({
+      title: 'ROC curve', cfg: {
+        type: 'line',
+        data: { datasets: [{ label: 'model', data: run.roc, borderColor: '#2f3ea8', borderWidth: 2, pointRadius: 0 }, { label: 'random', data: [{ x: 0, y: 0 }, { x: 1, y: 1 }], borderColor: '#6b7d8f', borderDash: [4, 4], borderWidth: 1, pointRadius: 0 }] },
+        options: baseOpts({ xType: 'linear', xTitle: 'false positive rate', yTitle: 'true positive rate', yMin: 0, yMax: 1 })
+      }
+    });
+  } else {
+    const groups = [];
+    for (let k = 0; k < +run.cfg.hp.k; k++) groups.push({ label: 'cluster ' + k, data: [], backgroundColor: SERIES[k % SERIES.length], pointRadius: 3 });
+    run.pca.proj.forEach((p, i) => groups[run.labels[i]].data.push({ x: p[0], y: p[1] }));
+    out.push({ title: 'Clusters projected to two dimensions (PCA)', cfg: { type: 'scatter', data: { datasets: groups }, options: baseOpts({ xType: 'linear', xTitle: 'PC1', yTitle: 'PC2' }) } });
+    out.push({ title: 'Inertia against k', cfg: { type: 'line', data: { labels: run.test.elbow.map(e => e.k), datasets: [{ label: 'inertia', data: run.test.elbow.map(e => e.inertia), borderColor: '#d63a56', borderWidth: 2, pointRadius: 3 }] }, options: baseOpts({ legend: false, xTitle: 'k', yTitle: 'inertia' }) } });
+  }
+  if (run.importance && run.importance.length) {
+    const top = run.importance.slice(0, 12);
+    out.push({
+      title: 'Permutation importance', cfg: {
+        type: 'bar',
+        data: { labels: top.map(i => i.name.slice(0, 26)), datasets: [{ label: 'importance', data: top.map(i => i.imp), backgroundColor: top.map(i => i.imp >= 0 ? '#2f3ea8' : '#d63a56') }] },
+        options: baseOpts({ indexAxis: 'y', legend: false })
+      }
+    });
+  }
+  return out;
+}
+
+/* ============================================================
+   Navigation + wiring
+   ============================================================ */
+function show(view) {
+  State.view = view;
+  $$('.view').forEach(v => v.classList.add('hide'));
+  $('#view-' + view).classList.remove('hide');
+  $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.view === view));
+  if (view === 'analytics') renderAnalytics();
+  if (view === 'project') renderProjection();
+  if (view === 'runs') renderRuns();
+  if (view === 'report') { renderReportList(); renderFindings(); }
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+function init() {
+  $$('#nav button').forEach(b => b.addEventListener('click', () => show(b.dataset.view)));
+  const fi = $('#fileInput');
+  $('#pickFile').addEventListener('click', () => fi.click());
+  $('#pickFile2').addEventListener('click', () => fi.click());
+  fi.addEventListener('change', e => { addFiles(e.target.files); fi.value = ''; });
+  const dz = $('#drop');
+  ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('hot'); }));
+  ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('hot'); }));
+  dz.addEventListener('drop', e => { if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+  $('#loadDemo').addEventListener('click', () => {
+    const ds = demoDataset();
+    State.datasets.push(ds); State.activeDS = ds.id;
+    renderData(); syncModelForm(); renderRail(); updateCostHint();
+    toast('Demo table loaded — 600 rows of synthetic housing data');
+  });
+  $('#btnPreview').addEventListener('click', () => {
+    const ds = getDS(State.activeDS); if (!ds) return;
+    const p = $('#previewPanel'); p.hidden = false;
+    const cols = ds.fields.map(f => f.name);
+    $('#previewTable').innerHTML = '<table><thead><tr>' + cols.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr></thead><tbody>' +
+      ds.rows.slice(0, 100).map(r => '<tr>' + cols.map(c => '<td>' + esc(fmtCell(ds, c, r[c])) + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
+    p.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+  $('#closePreview').addEventListener('click', () => { $('#previewPanel').hidden = true; });
+  $('#histCol').addEventListener('change', () => { const ds = getDS(State.activeDS); if (ds) drawHist(ds, $('#histCol').value); });
+
+  $('#cfgDataset').addEventListener('change', () => { State.activeDS = $('#cfgDataset').value; $('#featList').dataset.ready = ''; renderData(); syncModelForm(); updateCostHint(); });
+  $('#cfgTarget').addEventListener('change', () => { const ds = getDS($('#cfgDataset').value); syncFeatures(ds, currentTask()); syncAlgos(currentTask()); });
+  $('#cfgTask').addEventListener('change', () => { const ds = getDS($('#cfgDataset').value); $('#cfgTarget').disabled = currentTask() === 'clustering'; syncFeatures(ds, currentTask()); syncAlgos(currentTask()); });
+  $('#cfgAlgo').addEventListener('change', () => { syncHyper(); updateCostHint(); });
+  $('#cfgCV').addEventListener('change', updateCostHint);
+  $('#hyper').addEventListener('input', updateCostHint);
+  $('#featList').addEventListener('change', updateCostHint);
+  $('#cfgSplit').addEventListener('input', () => $('#splitLbl').textContent = $('#cfgSplit').value + '%');
+  $('#featAll').addEventListener('click', () => { $$('#featList input').forEach(i => i.checked = true); updateCostHint(); });
+  $('#featNone').addEventListener('click', () => { $$('#featList input').forEach(i => i.checked = false); updateCostHint(); });
+  $('#btnRun').addEventListener('click', () => { const cfg = readConfig(); if (!cfg.features.length) { $('#runMsg').innerHTML = '<div class="note bad"><b>No features selected.</b> Tick at least one column to learn from.</div>'; return; } doRun(cfg); });
+  $('#btnSweep').addEventListener('click', sweepAll);
+
+  $('#btnClearRuns').addEventListener('click', () => { State.runs = []; State.activeRun = null; renderStrip(); renderRuns(); renderRail(); renderReportList(); renderFindings(); });
+  $('#btnExportRuns').addEventListener('click', () => {
+    if (!State.runs.length) return;
+    downloadCSV(State.runs.map(r => {
+      const p = primaryOf(r);
+      return {
+        scenario: r.cfg.name, table: r.ds.name, task: r.cfg.task, target: r.cfg.target || '',
+        algorithm: ALGOS[r.cfg.algo].label, hyperparameters: JSON.stringify(r.cfg.hp),
+        features: r.cfg.features.join(' | '), test_size: r.cfg.testSize, split: r.cfg.splitMode, seed: r.cfg.seed,
+        metric: p.label, test_score: p.value,
+        train_score: r.cfg.task === 'regression' ? r.train.r2 : r.cfg.task === 'classification' ? r.train.acc : '',
+        rmse: r.cfg.task === 'regression' ? r.test.rmse : '', mae: r.cfg.task === 'regression' ? r.test.mae : '',
+        macro_f1: r.cfg.task === 'classification' ? r.test.macroF1 : '',
+        cv_mean: r.cv ? r.cv.mean : '', cv_sd: r.cv ? r.cv.sd : '', runtime_ms: r.ms
+      };
+    }), 'scenario_results.csv');
+  });
+  $('#anPick').addEventListener('change', () => { State.activeRun = $('#anPick').value; renderStrip(); renderAnalytics(); });
+  $('#prPick').addEventListener('change', () => { State.activeRun = $('#prPick').value; renderStrip(); renderProjection(); });
+  $('#rpAll').addEventListener('click', () => { const boxes = $$('#rpList input'); const anyOff = boxes.some(b => !b.checked); boxes.forEach(b => b.checked = anyOff); });
+  $('#btnPDF').addEventListener('click', buildPDF);
+
+  if (!hasChart()) {
+    const d = document.createElement('div');
+    d.className = 'note warn';
+    d.innerHTML = '<b>Charts are unavailable.</b> The Chart.js CDN did not load, so tables and metrics will still work but plots will be blank. Open this file with an internet connection, or vendor the library locally.';
+    $('.main').prepend(d);
+  }
+  renderRail();
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body></html>

@@ -4,9 +4,7 @@ A workbench for testing machine learning algorithms on your own tables — in th
 
 Load a CSV, pick a target, fit nine algorithms, compare the runs, and export a PDF report that includes the caveats as well as the numbers.
 
-**Live:** https://ml-bench.vercel.app · **About the project:** [`/about`](https://ml-bench.vercel.app/about)
-
-> Replace the two URLs above once Vercel gives you the real domain, and replace `carol-mello` throughout this repo with your GitHub username.
+**Live:** https://m-lbench.vercel.app · **About the project:** [`/about`](https://m-lbench.vercel.app/about)
 
 ---
 
@@ -114,7 +112,7 @@ If you are adding an algorithm, ARCHITECTURE.md has the four places to touch.
 
 ## Built by
 
-**Carol Mello**, data engineer. The technical foundation comes from data engineering work; the subject comes from years of building data analytics visualisations. More on the [about page](about.html).
+**Carol Mello**, data engineer. The technical foundation comes from data engineering work; the subject comes from years of building data analytics visualisations. More of my work is at [carolmello.vercel.app](https://carolmello.vercel.app/); more on this project is on the [about page](about.html).
 
 ## Licence
 
